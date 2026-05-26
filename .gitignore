@@ -1,0 +1,25 @@
+# Zephyr & CMake Build Artifacts
+build/
+.cache/
+CMakeCache.txt
+CMakeFiles/
+
+# Python & Pytest Caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*pytest*
+.uv/
+
+# Harbor & Agent Local Evaluation Outputs
+agent_output.txt
+state.json
+logs/
+ctrf.json
+reward.txt
+
+# Editor & OS Defaults
+.vscode/
+.idea/
+.DS_Store
