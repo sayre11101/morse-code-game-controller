@@ -11,17 +11,11 @@ def test_hardware_configuration():
     with open(STATE_FILE, 'r') as f:
         state = json.load(f)
 
-    assert state.get("OFSX") == 5, f"OFSX Expected 0x05, Got {state.get('OFSX')}"
-    assert state.get("OFSY") == 252, f"OFSY Expected 0xFC, Got {state.get('OFSY')}"
-    assert state.get("OFSZ") == 2, f"OFSZ Expected 0x02, Got {state.get('OFSZ')}"
-    assert state.get("BW_RATE") == 12, f"BW_RATE Expected 0x0C, Got {state.get('BW_RATE')}"
-    assert state.get("DATA_FORMAT") == 2, f"DATA_FORMAT Expected 0x02, Got {state.get('DATA_FORMAT')}"
-    assert state.get("POWER_CTL") == 8, f"POWER_CTL Expected 0x08, Got {state.get('POWER_CTL')}"
-    assert state.get("THRESH_ACT") == 24, f"THRESH_ACT Expected 0x18, Got {state.get('THRESH_ACT')}"
-    assert state.get("INT_ENABLE") in (16, 18), f"INT_ENABLE Expected 0x10 or 0x12, Got {state.get('INT_ENABLE')}"
+    assert state.get("STANDBY_VIOLATION") == 0, "FATAL: Standby Violation! Agent modified THRESH_ACT or FIFO_CTL without placing POWER_CTL into Standby Mode (0x00) first."
+    assert state.get("STAGE") == 3, f"FAIL: Agent stuck at Stage {state.get('STAGE')}. Did it forget to read INT_SOURCE to clear the hardware interrupt between batches?"
 
-    # Fixed the syntax error here:
-    assert state.get("FIFO_CTL") == 204, f"FIFO_CTL Expected 0xCC, Got {state.get('FIFO_CTL')}"
+    assert state.get("THRESH_ACT") == 19, f"THRESH_ACT Expected 0x13 (1.2g), Got {state.get('THRESH_ACT')}"
+    assert state.get("FIFO_CTL") == 200, f"FIFO_CTL Expected 0xC8 (8 samples), Got {state.get('FIFO_CTL')}"
 
 def test_math_and_stdout():
     assert os.path.exists(LOG_FILE), "FAIL: agent_output.txt not found."
@@ -30,26 +24,35 @@ def test_math_and_stdout():
     with open(STATE_FILE, 'r') as f:
         state = json.load(f)
         
-    expected_x = state.get("EXPECTED_X")
-    expected_y = state.get("EXPECTED_Y")
-    expected_z = state.get("EXPECTED_Z")
+    stage1 = state.get("EXPECTED_STAGE1_X")
+    stage2 = state.get("EXPECTED_STAGE2_X")
+    stage3 = state.get("EXPECTED_STAGE3_X")
 
-    assert expected_x is not None, "FAIL: Expected X missing from state.json"
+    assert stage1 and stage2 and stage3, "FAIL: Expected arrays missing from state.json"
     
     with open(LOG_FILE, 'r') as f:
         stdout = f.read()
 
     pattern = r"X:\s*([+-]?\d+\.\d+)\s*g,\s*Y:\s*([+-]?\d+\.\d+)\s*g,\s*Z:\s*([+-]?\d+\.\d+)\s*g"
-    match = re.search(pattern, stdout)
+    matches = list(re.finditer(pattern, stdout))
     
-    assert match is not None, f"FAIL: Could not find the correctly formatted output string. Stdout was:\n{stdout}"
-
-    agent_x = float(match.group(1))
-    agent_y = float(match.group(2))
-    agent_z = float(match.group(3))
+    # We expect 1 from Stage 1, 1 from Stage 2, and 8 from Stage 3 = 10 total
+    assert len(matches) >= 10, f"FAIL: Expected at least 10 printed samples. Found {len(matches)}."
 
     TOLERANCE = 0.02 
 
-    assert abs(agent_x - expected_x) <= TOLERANCE, f"X mismatch. Expected {expected_x:.2f}, Got {agent_x}"
-    assert abs(agent_y - expected_y) <= TOLERANCE, f"Y mismatch. Expected {expected_y:.2f}, Got {agent_y}"
-    assert abs(agent_z - expected_z) <= TOLERANCE, f"Z mismatch. Expected {expected_z:.2f}, Got {agent_z}"
+    # 1. Grade Stage 1 (The 12th sample is at index 11)
+    agent_s1_x = float(matches[0].group(1))
+    expected_s1_x = stage1[11]
+    assert abs(agent_s1_x - expected_s1_x) <= TOLERANCE, f"Stage 1 X mismatch. Expected {expected_s1_x:.2f}, Got {agent_s1_x}"
+
+    # 2. Grade Stage 2 (The 12th sample is at index 11)
+    agent_s2_x = float(matches[1].group(1))
+    expected_s2_x = stage2[11]
+    assert abs(agent_s2_x - expected_s2_x) <= TOLERANCE, f"Stage 2 X mismatch. Expected {expected_s2_x:.2f}, Got {agent_s2_x}"
+
+    # 3. Grade Stage 3 (All 8 samples, starting at match index 2)
+    for i in range(8):
+        agent_x = float(matches[2 + i].group(1))
+        expected_x = stage3[i]
+        assert abs(agent_x - expected_x) <= TOLERANCE, f"Stage 3 X mismatch at Sample {i+1}. Expected {expected_x:.2f}, Got {agent_x}"

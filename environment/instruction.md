@@ -13,3 +13,6 @@ The environment is a Zephyr native_sim with an i2c driver. Send i2c commands to 
 - Output the 12th sample converted to floating point in units of "g" (gravity)
 - Print the final gravity values to standard output in this format:
   - X: [val] g, Y: [val] g, Z: [val] g on one line
+- Wait for another trigger, download the 12 samples and print out the 12th one like before
+- Change the threshold to 1.2g and the number of samples to 8
+- Wait for another trigger, download the 8 samples and print all samples on 8 lines in the same format as the 1 sample from before
