@@ -2,8 +2,9 @@ import json
 import re
 import os
 
-STATE_FILE = '/app/state.json'
-LOG_FILE = '/app/agent_output.txt'
+# --- UPDATED PATHS FOR THE SANDBOX ---
+STATE_FILE = '/tmp/eval/state.json'
+LOG_FILE = '/tmp/eval/agent_output.txt'
 
 def test_hardware_configuration():
     assert os.path.exists(STATE_FILE), "FAIL: state.json not found."
@@ -11,11 +12,18 @@ def test_hardware_configuration():
     with open(STATE_FILE, 'r') as f:
         state = json.load(f)
 
+    # Core Trap Verification
     assert state.get("STANDBY_VIOLATION") == 0, "FATAL: Standby Violation! Agent modified THRESH_ACT or FIFO_CTL without placing POWER_CTL into Standby Mode (0x00) first."
     assert state.get("STAGE") == 3, f"FAIL: Agent stuck at Stage {state.get('STAGE')}. Did it forget to read INT_SOURCE to clear the hardware interrupt between batches?"
 
+    # Configuration Verification
     assert state.get("THRESH_ACT") == 19, f"THRESH_ACT Expected 0x13 (1.2g), Got {state.get('THRESH_ACT')}"
     assert state.get("FIFO_CTL") == 200, f"FIFO_CTL Expected 0xC8 (8 samples), Got {state.get('FIFO_CTL')}"
+    
+    # Offset Math Verification
+    assert state.get("OFSX") == 5, f"OFSX Expected 5 (+5), Got {state.get('OFSX')}"
+    assert state.get("OFSY") == 252, f"OFSY Expected 252 (-4 in 8-bit Two's Complement), Got {state.get('OFSY')}"
+    assert state.get("OFSZ") == 2, f"OFSZ Expected 2 (+2), Got {state.get('OFSZ')}"
 
 def test_math_and_stdout():
     assert os.path.exists(LOG_FILE), "FAIL: agent_output.txt not found."

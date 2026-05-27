@@ -70,10 +70,6 @@ RUN pip3 install --no-cache-dir PyMuPDF==1.24.2 pdfplumber==0.11.9 pypdf==5.0.1
 RUN mkdir -p /app
 WORKDIR /app
 # Copy from the local environment/ context directly into the image's /app root
-COPY CMakeLists.txt /app/CMakeLists.txt
-COPY mock_sensor.c /app/mock_sensor.c
-COPY app.overlay /app/app.overlay
-COPY prj.conf /app/prj.conf
 # Copy the instructions and target PDF directly into the agent's workspace
 COPY instruction.md /app/instruction.md
 COPY adxl345.pdf /app/

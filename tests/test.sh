@@ -1,13 +1,32 @@
 #!/bin/bash
 # tests/test.sh
 
-# Ensure we are in the Harbor root
-cd /app || exit 1
-
+set -e
 mkdir -p /logs/verifier
+mkdir -p /tmp/eval
 
-# Compile flat application in the root (Files are already here via Dockerfile!)
+echo "Staging build environment in /tmp/eval..."
+
+# 1. Grab configs and emulator
+cp /tests/CMakeLists.txt /tmp/eval/
+cp /tests/app.overlay /tmp/eval/
+cp /tests/prj.conf /tmp/eval/
+cp /tests/mock_sensor.c /tmp/eval/
+
+# 2. Grab the agent's code
+if [ ! -f /app/main.c ]; then
+    echo "FAIL: Agent did not generate /app/main.c"
+    echo 0 > /logs/verifier/reward.txt
+    exit 1
+fi
+cp /app/main.c /tmp/eval/
+
+# Navigate to the sandbox
+cd /tmp/eval
+
+# 3. Compile
 echo "Building Zephyr application..."
+set +e 
 west build -b native_sim .
 if [ $? -ne 0 ]; then
     echo "FAIL: Application failed to compile."
@@ -15,21 +34,28 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# Execute with Timeout (Outputs will land in /app/)
+# 4. Execute
 echo "Executing Zephyr binary..."
 timeout 5 ./build/zephyr/zephyr.exe > agent_output.txt
 
+# CRITICAL FIX: Capture the exit code immediately after execution!
+EXIT_CODE=$?
+
+# 5. Diagnostic Logging (Matched exactly to your old format)
 printf "\nAgent output\n"
 cat agent_output.txt
 printf "\n------------------\n"
 printf "\nAgent json\n"
-cat state.json
+if [ -f state.json ]; then
+    cat state.json
+else
+    echo "NO STATE.JSON GENERATED"
+fi
 printf "\n---------------\n"
 cat agent_output.txt
 printf "\n---------------\n"
 
-
-EXIT_CODE=$?
+# 6. Check execution success
 if [ $EXIT_CODE -ne 0 ] && [ $EXIT_CODE -ne 124 ]; then
     echo "FAIL: Runtime Error (Code $EXIT_CODE)."
     echo 0 > /logs/verifier/reward.txt
@@ -38,7 +64,7 @@ fi
 
 ulimit -n 1024
 
-# Run tests strictly offline using the pre-warmed uv cache
+# 7. Run tests offline
 uvx \
   --offline \
   -p 3.12 \
@@ -46,7 +72,7 @@ uvx \
   -w pytest-json-ctrf==0.3.5 \
   pytest --ctrf /logs/verifier/ctrf.json /tests/test_outputs.py -rA
 
-# Produce reward file (REQUIRED)
+# 8. Reward File
 if [ $? -eq 0 ]; then
   echo 1 > /logs/verifier/reward.txt
 else

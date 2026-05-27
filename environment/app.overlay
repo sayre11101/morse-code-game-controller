@@ -1,8 +1,0 @@
-&i2c0 {
-	status = "okay";
-
-	adxl345: adxl345@53 {
-		compatible = "adi,adxl345";
-		reg = <0x53>;
-	};
-};

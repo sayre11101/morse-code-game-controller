@@ -4,18 +4,21 @@
 #include <zephyr/drivers/i2c_emul.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <time.h>
 
 // --- Global State Variables ---
 static uint8_t reg_power_ctl = 0;
 static uint8_t reg_thresh_act = 0;
 static uint8_t reg_fifo_ctl = 0;
+static uint8_t reg_ofsx = 0;
+static uint8_t reg_ofsy = 0;
+static uint8_t reg_ofsz = 0;
 
 static int current_stage = 1;      
 static int fifo_read_index = 0;    
 static int standby_violation = 0;  
 
-// Arrays to hold the expected answers for the reviewer's explicit checks
 static float expected_stage1_x[12]; 
 static float expected_stage2_x[12]; 
 static float expected_stage3_x[8]; 
@@ -33,6 +36,9 @@ static void write_state_json()
         fprintf(fp, "  \"POWER_CTL\": %d,\n", reg_power_ctl);
         fprintf(fp, "  \"THRESH_ACT\": %d,\n", reg_thresh_act);
         fprintf(fp, "  \"FIFO_CTL\": %d,\n", reg_fifo_ctl);
+        fprintf(fp, "  \"OFSX\": %d,\n", reg_ofsx);
+        fprintf(fp, "  \"OFSY\": %d,\n", reg_ofsy);
+        fprintf(fp, "  \"OFSZ\": %d,\n", reg_ofsz);
         
         fprintf(fp, "  \"EXPECTED_STAGE1_X\": [");
         for(int i=0; i<12; i++) fprintf(fp, "%.4f%s", (double)expected_stage1_x[i], (i==11) ? "" : ",");
@@ -77,7 +83,6 @@ static void generate_batch(int size, float target_g)
         current_fifo[i][4] = raw_z & 0xFF;
         current_fifo[i][5] = (raw_z >> 8) & 0xFF;
 
-        // Save into the correct expected array based on the current stage
         float final_g = raw_x * 0.00390625f;
         if (current_stage == 1) expected_stage1_x[i] = final_g;
         else if (current_stage == 2) expected_stage2_x[i] = final_g;
@@ -98,6 +103,9 @@ static int adxl345_emul_transfer_i2c(const struct emul *target, struct i2c_msg *
     if (num_msgs == 1 && (msg0->flags & I2C_MSG_READ) == 0 && msg0->len == 2) {
         uint8_t val = msg0->buf[1];
         
+        // --- NEW: LOG ALL I2C WRITES ---
+        printf("[EMULATOR] I2C Write - Register: 0x%02X, Value: 0x%02X\n", reg, val);
+        
         if ((reg == 0x24 || reg == 0x38) && reg_power_ctl == 0x08) {
             standby_violation = 1;
         }
@@ -106,10 +114,14 @@ static int adxl345_emul_transfer_i2c(const struct emul *target, struct i2c_msg *
             case 0x2D: reg_power_ctl = val; break;
             case 0x24: reg_thresh_act = val; break;
             case 0x38: reg_fifo_ctl = val; break;
+            case 0x1E: reg_ofsx = val; break;
+            case 0x1F: reg_ofsy = val; break;
+            case 0x20: reg_ofsz = val; break;
         }
 
         if (current_stage == 2 && reg_power_ctl == 0x08 && reg_thresh_act == 0x13 && reg_fifo_ctl == 0xC8) {
             current_stage = 3;
+            printf("[EMULATOR] Reconfiguration detected. Moving to Stage 3.\n");
             generate_batch(8, 1.30f); 
         }
         write_state_json();
@@ -123,6 +135,8 @@ static int adxl345_emul_transfer_i2c(const struct emul *target, struct i2c_msg *
             msg1->buf[0] = 0x80; 
 
             if (reg == 0x30 && current_stage == 1 && fifo_read_index >= 12) {
+                // --- NEW: LOG INTERRUPT CLEAR ---
+                printf("[EMULATOR] INT_SOURCE Read (Interrupt Cleared). Moving to Stage 2.\n");
                 current_stage = 2;
                 generate_batch(12, 1.60f); 
             }

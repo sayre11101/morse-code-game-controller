@@ -35,12 +35,15 @@ int main(void) {
     }
 
     // --- INITIAL BOOT CONFIGURATION ---
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x31, 0x02);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2C, 0x0C);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xCC);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x18);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2E, 0x12);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x08);
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x1E, 0x05); // OFSX: +5
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x1F, 0xFC); // OFSY: -4
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x20, 0x02); // OFSZ: +2
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x31, 0x02); // Data format
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2C, 0x0C); // BW Rate
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xCC); // FIFO: 12 Samples
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x18); // Thresh: 1.5g
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2E, 0x12); // INT_ENABLE
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x08); // POWER_CTL: Measure Mode
 
     uint8_t data[6];
     float scale = 0.00390625f; 
@@ -73,10 +76,10 @@ int main(void) {
     clear_interrupt(i2c_dev);
 
     // --- STAGE 3: Reconfigure & Dump Array ---
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x00);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x13);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xC8);
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x08);
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x00); // Standby
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x13); // New Thresh
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xC8); // New FIFO
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x08); // Measure
 
     wait_for_trigger(i2c_dev);
     for (int i = 0; i < 8; i++) {
