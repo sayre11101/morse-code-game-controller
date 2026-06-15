@@ -42,6 +42,7 @@ int main(void) {
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2C, 0x0C); // BW Rate
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xCC); // FIFO: 12 Samples
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x18); // Thresh: 1.5g
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x27, 0x70);
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2E, 0x12); // INT_ENABLE
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2D, 0x08); // POWER_CTL: Measure Mode
 

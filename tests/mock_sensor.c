@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <time.h>
 
 // --- Global State Variables ---
@@ -16,9 +17,12 @@ static uint8_t reg_ofsy = 0;
 static uint8_t reg_ofsz = 0;
 static uint8_t initial_thresh_act = 0;
 
-// --- NEW: Tracked Configuration Registers ---
+// --- Tracked Configuration Registers ---
 static uint8_t reg_bw_rate = 0;
 static uint8_t reg_data_format = 0;
+static uint8_t initial_fifo_ctl = 0;
+static bool fifo_ctl_written = false;
+static uint8_t act_inact_ctl = 0;
 // --------------------------------------------
 
 static int current_stage = 1;
@@ -26,8 +30,16 @@ static int fifo_read_index = 0;
 static int standby_violation = 0;
 
 static float expected_stage1_x[12];
+static float expected_stage1_y[12];
+static float expected_stage1_z[12];
+
 static float expected_stage2_x[12];
+static float expected_stage2_y[12];
+static float expected_stage2_z[12];
+
 static float expected_stage3_x[8];
+static float expected_stage3_y[8];
+static float expected_stage3_z[8];
 
 static uint8_t current_fifo[12][6] = {0};
 
@@ -42,11 +54,11 @@ static void write_state_json()
         fprintf(fp, "  \"STANDBY_VIOLATION\": %d,\n", standby_violation);
         fprintf(fp, "  \"POWER_CTL\": %d,\n", reg_power_ctl);
         
-        // --- NEW: Export the configuration variables ---
         fprintf(fp, "  \"INITIAL_THRESH_ACT\": %d,\n", initial_thresh_act);
         fprintf(fp, "  \"BW_RATE\": %d,\n", reg_bw_rate);
         fprintf(fp, "  \"DATA_FORMAT\": %d,\n", reg_data_format);
-        // -----------------------------------------------
+        fprintf(fp, "  \"INITIAL_FIFO_CTL\": %u,\n", initial_fifo_ctl);
+        fprintf(fp, "  \"ACT_INACT_CTL\": %u,\n", act_inact_ctl);
 
         fprintf(fp, "  \"THRESH_ACT\": %d,\n", reg_thresh_act);
         fprintf(fp, "  \"FIFO_CTL\": %d,\n", reg_fifo_ctl);
@@ -54,19 +66,31 @@ static void write_state_json()
         fprintf(fp, "  \"OFSY\": %d,\n", reg_ofsy);
         fprintf(fp, "  \"OFSZ\": %d,\n", reg_ofsz);
 
+        // Stage 1 Dumps
         fprintf(fp, "  \"EXPECTED_STAGE1_X\": [");
-        for (int i = 0; i < 12; i++)
-            fprintf(fp, "%.4f%s", (double)expected_stage1_x[i], (i == 11) ? "" : ",");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage1_x[i], (i == 11) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE1_Y\": [");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage1_y[i], (i == 11) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE1_Z\": [");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage1_z[i], (i == 11) ? "" : ",");
         fprintf(fp, "],\n");
 
+        // Stage 2 Dumps
         fprintf(fp, "  \"EXPECTED_STAGE2_X\": [");
-        for (int i = 0; i < 12; i++)
-            fprintf(fp, "%.4f%s", (double)expected_stage2_x[i], (i == 11) ? "" : ",");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage2_x[i], (i == 11) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE2_Y\": [");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage2_y[i], (i == 11) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE2_Z\": [");
+        for (int i = 0; i < 12; i++) fprintf(fp, "%.4f%s", (double)expected_stage2_z[i], (i == 11) ? "" : ",");
         fprintf(fp, "],\n");
 
+        // Stage 3 Dumps
         fprintf(fp, "  \"EXPECTED_STAGE3_X\": [");
-        for (int i = 0; i < 8; i++)
-            fprintf(fp, "%.4f%s", (double)expected_stage3_x[i], (i == 7) ? "" : ",");
+        for (int i = 0; i < 8; i++) fprintf(fp, "%.4f%s", (double)expected_stage3_x[i], (i == 7) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE3_Y\": [");
+        for (int i = 0; i < 8; i++) fprintf(fp, "%.4f%s", (double)expected_stage3_y[i], (i == 7) ? "" : ",");
+        fprintf(fp, "],\n  \"EXPECTED_STAGE3_Z\": [");
+        for (int i = 0; i < 8; i++) fprintf(fp, "%.4f%s", (double)expected_stage3_z[i], (i == 7) ? "" : ",");
         fprintf(fp, "]\n");
 
         fprintf(fp, "}\n");
@@ -104,13 +128,23 @@ static void generate_batch(int size, float target_g)
         current_fifo[i][4] = raw_z & 0xFF;
         current_fifo[i][5] = (raw_z >> 8) & 0xFF;
 
-        float final_g = raw_x * 0.00390625f;
-        if (current_stage == 1)
-            expected_stage1_x[i] = final_g;
-        else if (current_stage == 2)
-            expected_stage2_x[i] = final_g;
-        else if (current_stage == 3)
-            expected_stage3_x[i] = final_g;
+        float final_x = raw_x * 0.00390625f;
+        float final_y = raw_y * 0.00390625f;
+        float final_z = raw_z * 0.00390625f;
+
+        if (current_stage == 1) {
+            expected_stage1_x[i] = final_x;
+            expected_stage1_y[i] = final_y;
+            expected_stage1_z[i] = final_z;
+        } else if (current_stage == 2) {
+            expected_stage2_x[i] = final_x;
+            expected_stage2_y[i] = final_y;
+            expected_stage2_z[i] = final_z;
+        } else if (current_stage == 3) {
+            expected_stage3_x[i] = final_x;
+            expected_stage3_y[i] = final_y;
+            expected_stage3_z[i] = final_z;
+        }
     }
     write_state_json();
 }
@@ -138,26 +172,30 @@ static int adxl345_emul_transfer_i2c(const struct emul *target, struct i2c_msg *
 
         switch (reg)
         {
-        // --- NEW: Intercept BW_RATE and DATA_FORMAT ---
         case 0x2C:
             reg_bw_rate = val;
             break;
         case 0x31:
             reg_data_format = val;
             break;
-        // ----------------------------------------------
         case 0x2D:
             reg_power_ctl = val;
             break;
         case 0x24:
-            // Capture the very first write for the reviewer's requirement
             if (initial_thresh_act == 0)
             {
                 initial_thresh_act = val;
             }
             reg_thresh_act = val;
             break;
+        case 0x27:
+            act_inact_ctl = val;
+            break;
         case 0x38:
+            if (!fifo_ctl_written) {
+                initial_fifo_ctl = val;
+                fifo_ctl_written = true;
+            }
             reg_fifo_ctl = val;
             break;
         case 0x1E:
