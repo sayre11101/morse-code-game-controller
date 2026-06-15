@@ -38,7 +38,7 @@ int main(void) {
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x1E, 0x05); // OFSX: +5
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x1F, 0xFC); // OFSY: -4
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x20, 0x02); // OFSZ: +2
-    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x31, 0x02); // Data format
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x31, 0x00); // Data format: +/- 2g
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x2C, 0x0C); // BW Rate
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x38, 0xCC); // FIFO: 12 Samples
     i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, 0x24, 0x18); // Thresh: 1.5g

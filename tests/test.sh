@@ -1,7 +1,6 @@
 #!/bin/bash
 # tests/test.sh
 
-set -e
 mkdir -p /logs/verifier
 mkdir -p /tmp/eval
 
@@ -24,9 +23,19 @@ cp /app/main.c /tmp/eval/
 # Navigate to the sandbox
 cd /tmp/eval
 
+# --- PRE-FLIGHT CHEAT DETECTION ---
+echo "Running pre-flight cheat detection..."
+python3 /tests/helper.py preflight --file /tmp/eval/main.c
+if [ $? -ne 0 ]; then
+    echo "FAIL: Pre-flight check failed. Agent attempted to cheat or missed required headers."
+    echo 0 > /logs/verifier/reward.txt
+    exit 1
+fi
+echo "Pre-flight check passed. Proceeding to build..."
+# ----------------------------------
+
 # 3. Compile
 echo "Building Zephyr application..."
-set +e 
 west build -b native_sim .
 if [ $? -ne 0 ]; then
     echo "FAIL: Application failed to compile."
