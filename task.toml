@@ -1,27 +1,59 @@
+# Task configuration schema version
 version = "2.0"
 
+# Task metadata (author, difficulty, categorization)
 [metadata]
-author_name = "Sayre"
-author_email = "sayre@tempus.design"
+author_name = "anonymous"
+author_email = "anonymous"
 difficulty = "unknown"
 category = "software-engineering"
-tags = ["zephyr", "i2c", "embedded", "sensor", "c"]      
+# Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
+subcategories = []
+# Total milestone count — must match the number of [[steps]] blocks below
+number_of_milestones = 3
+# Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files
+codebase_size = "minimal"
+# Coding languages used in the oracle solution or required by the agent
+languages = ["bash", "c"]
+tags = ["dsp", "embedded", "zephyr", "pll", "fsk", "c"] # Estimated time to complete (minutes)
 expert_time_estimate_min = 60
 junior_time_estimate_min = 120
-subcategories = ["tool_specific"]
-number_of_milestones = 0
-codebase_size = "minimal"
-languages = ["python", "bash", "c"]
 
-[verifier]
-timeout_sec = 900.0
-
-[agent]
-timeout_sec = 900.0
-
+# Sandbox environment limits — applied across all milestones (the same container is shared)
 [environment]
-build_timeout_sec = 1200.0 # increase to allow west to build
 allow_internet = false
-cpus = 1
-memory_mb = 8192
-storage_mb = 20000
+build_timeout_sec = 600.0
+cpus = 2
+memory_mb = 4096
+storage_mb = 10240
+workdir = "/app"
+
+# Milestone 1
+[[steps]]
+name = "milestone_1"
+
+[steps.agent]
+timeout_sec = 900.0
+
+[steps.verifier]
+timeout_sec = 450.0
+
+# Milestone 2
+[[steps]]
+name = "milestone_2"
+
+[steps.agent]
+timeout_sec = 900.0
+
+[steps.verifier]
+timeout_sec = 450.0
+
+# Milestone 3
+[[steps]]
+name = "milestone_3"
+
+[steps.agent]
+timeout_sec = 900.0
+
+[steps.verifier]
+timeout_sec = 450.0

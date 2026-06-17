@@ -1,0 +1,3 @@
+# Milestone 2
+
+You must implement the data extraction logic to read accelerometer samples from the ADXL345 hardware FIFO. Open the adxl345_read.c file and write a function that polls the FIFO status. Wait for a trigger, then download the 12 samples. Extract the 12th sample, convert the raw data to floating point values representing gravity, and print it to standard output exactly formatted as X: [val] g, Y: [val] g, Z: [val] g on one line. You must then clear the interrupts and reset the trigger mode, wait for a second trigger, download the next 12 samples, and print the new 12th sample in the exact same format.

@@ -1,0 +1,34 @@
+Rubric 1: Milestone 1
+Agent correctly writes the value 0x05 to the X-axis offset register  +1
+Agent correctly calculates the two's complement value for the negative Y offset and writes it to the appropriate register  +2
+Agent correctly writes the value 0x02 to the Z-axis offset register  +1
+Agent calculates the exact THRESH_ACT register value by correctly applying the 62.5 mg/LSB scale factor  +2
+Agent configures the BW_RATE register for exactly 400 Hz  +1
+Agent explicitly configures the DATA_FORMAT register for the default +/- 2g range and 10-bit resolution  +1
+Agent sets the FIFO_CTL register to enable Trigger mode on the INT1 pin with a 12-sample watermark  +2
+Agent successfully transitions the sensor out of standby and into measurement mode by writing to the POWER_CTL register  +2
+Agent fails to calculate the correct two's complement value for negative offsets, resulting in invalid integer scaling  -3
+Agent fails to configure the FIFO trigger mode, leaving the sensor in the default bypass or FIFO mode  -5
+Agent omits the final POWER_CTL write, leaving the sensor indefinitely suspended in standby mode  -5
+
+Rubric 2: Milestone 2
+Agent successfully implements a polling loop that continuously reads the FIFO_STATUS register until the trigger watermark is reached  +2
+Agent successfully executes an I2C read to capture the entire 12-sample payload from the data registers  +2
+Agent correctly parses the raw data into 16-bit two's complement integers before conversion  +2
+Agent correctly multiplies the integer values by the standard scale factor to calculate the final gravity values in g's  +1
+Agent successfully extracts and outputs the X, Y, and Z gravity values for the 12th sample  +2
+Agent successfully clears the interrupts to reset the trigger mode before polling for the second batch  +1
+Agent fails to implement a valid polling loop, resulting in premature reads or an infinite hang  -5
+Agent calculates the raw bytes incorrectly, misinterpreting the two's complement data as unsigned integers  -3
+Agent fails to clear the interrupt, causing the device to lock up and preventing the second trigger from firing  -3
+
+Rubric 3: Milestone 3
+Agent correctly recalculates the THRESH_ACT register value for 1.2g (0x13)  +2
+Agent correctly updates the FIFO_CTL register to shift the watermark to 8 samples while retaining trigger mode  +2
+Agent successfully places the ADXL345 into standby mode (clearing the measure bit in POWER_CTL) before writing to the threshold or control registers  +5
+Agent restores the device to measurement mode after applying the new configurations  +1
+Agent successfully extracts and prints all 8 samples from the final watermark trigger in the specified formatting  +2
+Agent fails the standby trap by writing to control or threshold registers while the device is actively measuring  -5
+Agent calculates the new threshold incorrectly  -2
+Agent fails to restore the device to measurement mode, preventing the final trigger from firing  -3
+Agent fails to print all 8 samples, or formatting deviates significantly from the instructions  -2

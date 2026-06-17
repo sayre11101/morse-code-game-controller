@@ -1,36 +1,41 @@
-/* mock_sensor.c (Dummy Stub for Agent Workspace) */
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/i2c_emul.h>
+#include "adxl_regs.h"
+#include <math.h>
+#include <stdint.h>
 
-// --- Dummy I2C Transfer Handler ---
-// Simply returns 0 (success) so the agent's local build doesn't crash
-static int adxl345_dummy_transfer(const struct emul *target, struct i2c_msg *msgs, int num_msgs, int addr)
-{
-    return 0; 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+// --- Basic Simulation State ---
+static double current_sampling_freq = 122880.0; // Nominal 60Hz * 2048
+static double current_phase = 0.0;
+
+// --- Hardware Abstraction API ---
+
+void set_adc_sampling_frequency(double target_hz) {
+    // The agent calls this to adjust the ADC sampling rate
+    current_sampling_freq = target_hz;
 }
 
-static const struct i2c_emul_api adxl345_dummy_api = {
-    .transfer = adxl345_dummy_transfer
-};
+void fill_adc_buf(adc_buf_t *buf) {
+    uint16_t *buffer = buf->adc_buf;
+    
+    // In the agent's sandbox, we only simulate a perfectly flat 60Hz carrier.
+    // The real FSK physics engine and secret words will be injected during the final eval.
+    double dt = 1.0 / current_sampling_freq;
+    double nominal_grid_freq = 60.0; 
 
-// --- Dummy Device Initialization ---
-static int adxl345_dummy_device_init(const struct device *dev)
-{
-    return 0;
+    for (int i = 0; i < SAMPLES_PER_CYCLE; i++) {
+        // Integrate phase continuously to avoid popping/clicking
+        current_phase += 2.0 * M_PI * nominal_grid_freq * dt;
+
+        // Keep phase bounded
+        if (current_phase > 2.0 * M_PI) {
+            current_phase -= 2.0 * M_PI;
+        }
+
+        // Generate 12-bit right-justified ADC value (0 to 4095)
+        // Matches the 2047 amplitude established in Milestone 1
+        buffer[i] = (uint16_t)(2047.0 * sin(current_phase) + 2048.0);
+    }
 }
-
-// Bind the dummy device to the devicetree node so DEVICE_DT_GET passes
-DEVICE_DT_DEFINE(DT_NODELABEL(adxl345), adxl345_dummy_device_init, NULL, NULL, NULL, POST_KERNEL, 99, NULL);
-
-static int adxl345_dummy_emul_init(const struct emul *target, const struct device *parent) 
-{ 
-    return 0; 
-}
-
-// Attach the dummy emulator to the I2C bus
-#define ADXL345_EMUL_DEFINE(inst) \
-    EMUL_DT_DEFINE(DT_NODELABEL(adxl345), adxl345_dummy_emul_init, NULL, NULL, &adxl345_dummy_api, NULL)
-
-ADXL345_EMUL_DEFINE(0);

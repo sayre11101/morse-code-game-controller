@@ -1,10 +1,17 @@
-/* environment/main.c */
 #include <zephyr/kernel.h>
-#include <zephyr/device.h>
 #include <zephyr/drivers/i2c.h>
+#include <stdio.h>
+#include "headers/adxl345_setup.h"
+#include "headers/adxl345_read.h"
+#include "adxl_regs.h"
+
+/* Standard Zephyr I2C device binding */
+#define I2C_NODE DT_NODELABEL(i2c0)
+#define ADXL345_ADDR 0x53
 
 int main(void)
 {
-    /* TODO: Implement ADXL345 initialization and polling here */
+    printf("Starting ADXL345 Application...\n");
+
     return 0;
 }

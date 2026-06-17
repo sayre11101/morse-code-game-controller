@@ -1,5 +1,6 @@
 # Zephyr & CMake Build Artifacts
 build/
+bak/
 .cache/
 CMakeCache.txt
 CMakeFiles/
