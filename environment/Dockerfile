@@ -1,5 +1,5 @@
 # Upgrade to 24.04 to get Python 3.12 natively
-FROM mcr.microsoft.com/devcontainers/base@sha256:d94c97dd9cacf183d0a6fd12a8e87b526e9e928307674ae9c94139139c0c6eae
+FROM public.ecr.aws/docker/library/ubuntu:24.04@sha256:0d39fcc8335d6d74d5502f6df2d30119ff4790ebbb60b364818d5112d9e3e932
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PIP_BREAK_SYSTEM_PACKAGES=1
@@ -74,7 +74,6 @@ RUN pip3 install --no-cache-dir PyMuPDF==1.24.2 pdfplumber==0.11.9 pypdf==5.0.1 
 # ---------------------------------------------------------
 RUN mkdir -p /app
 WORKDIR /app
-COPY instruction.md /app/instruction.md
 COPY adxl345.pdf /app/
 COPY main.c /app/main.c
 COPY prj.conf /app/

@@ -60,6 +60,12 @@ def test_hardware_configuration():
         f"OFSY Expected 252 (-4 in 8-bit Two's Complement), Got {state.get('OFSY')}"
     )
     assert state.get("OFSZ") == 2, f"OFSZ Expected 2 (+2), Got {state.get('OFSZ')}"
+    # --- Polling Verification ---
+    total_polls = state.get("TOTAL_FIFO_POLLS", 0)
+    assert total_polls >= 6, (
+        f"FAIL: Agent did not poll the FIFO_STATUS register properly. "
+        f"Expected at least 6 polls across 3 stages, but only saw {total_polls}."
+    )
 
 
 def test_math_and_stdout():

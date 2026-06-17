@@ -1,6 +1,11 @@
 #!/bin/bash
 # tests/test.sh
 
+if [ "$PWD" = "/" ]; then
+   echo "Error: No working directory set."
+   exit 1
+fi
+
 mkdir -p /logs/verifier
 mkdir -p /tmp/eval
 

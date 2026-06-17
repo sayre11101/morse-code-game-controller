@@ -23,6 +23,10 @@ static uint8_t reg_data_format = 0;
 static uint8_t initial_fifo_ctl = 0;
 static bool fifo_ctl_written = false;
 static uint8_t act_inact_ctl = 0;
+
+// --- NEW: Polling Tracking ---
+static int fifo_poll_count = 0;
+static int total_polls_logged = 0;
 // --------------------------------------------
 
 static int current_stage = 1;
@@ -65,6 +69,9 @@ static void write_state_json()
         fprintf(fp, "  \"OFSX\": %d,\n", reg_ofsx);
         fprintf(fp, "  \"OFSY\": %d,\n", reg_ofsy);
         fprintf(fp, "  \"OFSZ\": %d,\n", reg_ofsz);
+        
+        // NEW: Export poll count
+        fprintf(fp, "  \"TOTAL_FIFO_POLLS\": %d,\n", total_polls_logged);
 
         // Stage 1 Dumps
         fprintf(fp, "  \"EXPECTED_STAGE1_X\": [");
@@ -102,6 +109,7 @@ static void write_state_json()
 static void generate_batch(int size, float target_g)
 {
     fifo_read_index = 0;
+    fifo_poll_count = 0; // NEW: Reset polling requirement for the new batch
 
     for (int i = 0; i < size; i++)
     {
@@ -228,11 +236,23 @@ static int adxl345_emul_transfer_i2c(const struct emul *target, struct i2c_msg *
             msg1->buf[0] = 0xE5; // Return the expected ADXL345 Device ID
         }
 
-        else if ((reg == 0x39 || reg == 0x30) && msg1->len == 1)
+        // NEW: Split the read logic for 0x39 and 0x30 to enforce polling
+        else if (reg == 0x39 && msg1->len == 1)
+        {
+            if (fifo_poll_count < 2) {
+                msg1->buf[0] = 0x00; // Not triggered yet
+            } else {
+                msg1->buf[0] = 0x80; // Trigger bit set
+            }
+            fifo_poll_count++;
+            total_polls_logged++;
+            write_state_json();
+        }
+        else if (reg == 0x30 && msg1->len == 1)
         {
             msg1->buf[0] = 0x80;
 
-            if (reg == 0x30 && current_stage == 1 && fifo_read_index >= 12)
+            if (current_stage == 1 && fifo_read_index >= 12)
             {
                 printf("[EMULATOR] INT_SOURCE Read (Interrupt Cleared). Moving to Stage 2.\n");
                 current_stage = 2;
@@ -264,7 +284,7 @@ static const struct i2c_emul_api adxl345_emul_api_i2c = {.transfer = adxl345_emu
 
 static int dummy_device_init(const struct device *dev)
 {
-    srand(time(NULL));
+    srand(42);
     generate_batch(12, 1.60f);
     return 0;
 }

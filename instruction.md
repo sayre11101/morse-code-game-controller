@@ -18,5 +18,6 @@ The environment is a Zephyr native_sim with an i2c driver. Send i2c commands to 
 - Wait for another trigger, download the 8 samples and print all samples on 8 lines in the same format as the 1 sample from before
 - CAUTION - you must read the manual to determine the correct sequence of either reading or writing registers including reading or writing control registers!!
 - CAUTION: specifically, read the manual on how to properly clear interrupts and reset the FIFO trigger mode before waiting for a new event
+- CAUTION: before modifying thresholds or control registers - per the manual - you must put the device in standby
 - NOTE that the ALT_ADDRESS pin is tied to ground.
 - Write your solution as a single C file at `/app/main.c`. The file will be compiled against the Zephyr native_sim target automatically.
