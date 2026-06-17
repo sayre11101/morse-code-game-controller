@@ -1,3 +1,14 @@
-# Milesone 1
+# Milestone 1
 
-You are building a software phase locked loop to track a wandering power grid frequency. To close the hardware loop, you must control the sampling frequency of an external ADC by manipulating the registers of an Si5351-B clock generator over I2C. Open the calculate_si5351_regs.c file and implement the calculate_si5351_regs function. The signature must take a double target_sample_freq and a pointer to an si5351_plla_regs_t struct. You must calculate the required fractional parameters and pack the resulting configuration values into the 8-byte array. The external crystal reference is exactly 25.0 MHz and the MultiSynth 0 divider is permanently fixed at 6400. You must achieve the target frequency exclusively by varying the PLLA fractional multiplier. Your output must print the struct values in exactly this format: REGS: followed by 8 space separated uppercase hex bytes.
+Implement the ADXL345 initialization sequence in `adxl345_setup.c`.
+
+Program the device over I2C to establish the baseline configuration:
+
+- Set offsets to `OFSX=+5`, `OFSY=-4`, `OFSZ=+2`
+- Set activity threshold to `1.5g` (`THRESH_ACT = 0x18`)
+- Set output data rate to `400 Hz` (`BW_RATE = 0x0C`)
+- Set data format to `+/-2g` / 10-bit behavior (`DATA_FORMAT = 0x00`)
+- Set FIFO trigger mode with `12` samples on `INT1` (`FIFO_CTL = 0xCC`)
+- Put the sensor into measurement mode (`POWER_CTL = 0x08`)
+
+Your implementation should be callable from `main.c` as `adxl345_setup()`.

@@ -1,6 +1,7 @@
 #include <zephyr/kernel.h>
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "headers/adxl345_setup.h"
 #include "headers/adxl345_read.h"
 #include "adxl_regs.h"
@@ -13,5 +14,12 @@ int main(void)
 {
     printf("Starting ADXL345 Application...\n");
 
-    return 0;
+    /* Milestone 1: base configuration */
+    adxl345_setup();
+
+    /* Milestone 2: two trigger/read cycles */
+    adxl345_read_samples();
+    adxl345_read_samples();
+
+    exit(0);
 }

@@ -5,6 +5,9 @@
 		},
 		{
 			"path": "../jobs"
+		},
+		{
+			"path": "../adxl345-one-milestone"
 		}
 	],
 	"settings": {}

@@ -37,7 +37,7 @@ void adxl345_read_samples(void) {
     float z_g = raw_z * SCALE_FACTOR;
 
     // 5. Print formatting
-    printf("X: %.2f g, Y: %.2f g, Z: %.2f g\n", x_g, y_g, z_g);
+    printf("X: %.2f, Y: %.2f, Z: %.2f\n", x_g, y_g, z_g);
 
     // 6. Clear interrupts by reading INT_SOURCE (0x30)
     uint8_t dummy;

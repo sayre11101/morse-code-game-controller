@@ -8,14 +8,14 @@ author_email = "anonymous"
 difficulty = "unknown"
 category = "software-engineering"
 # Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
-subcategories = []
+subcategories = ["api_integration"]
 # Total milestone count — must match the number of [[steps]] blocks below
 number_of_milestones = 3
 # Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files
 codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
 languages = ["bash", "c"]
-tags = ["dsp", "embedded", "zephyr", "pll", "fsk", "c"] # Estimated time to complete (minutes)
+tags = ["embedded", "zephyr", "i2c", "adxl345", "c"] # Estimated time to complete (minutes)
 expert_time_estimate_min = 60
 junior_time_estimate_min = 120
 

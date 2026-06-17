@@ -2,6 +2,7 @@
 #include <zephyr/drivers/i2c.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include "headers/adxl345_setup.h"
 #include "headers/adxl345_read.h"
 #include "adxl_regs.h"
@@ -57,8 +58,8 @@ int main(void) {
         float y_g = raw_y * SCALE_FACTOR;
         float z_g = raw_z * SCALE_FACTOR;
 
-        printf("X: %.2f g, Y: %.2f g, Z: %.2f g\n", x_g, y_g, z_g);
+        printf("X: %.2f, Y: %.2f, Z: %.2f\n", x_g, y_g, z_g);
     }
 
-    return 0;
+    exit(0);
 }

@@ -69,3 +69,4 @@ COPY headers/ /app/headers/
 # Copy the Zephyr build configuration
 COPY CMakeLists.txt /app/
 COPY prj.conf /app/
+COPY app.overlay /app/
