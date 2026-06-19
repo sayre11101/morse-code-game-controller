@@ -1,40 +1,40 @@
-Rubric 1: Milestone 1 - ADXL345 Setup
-Agent writes the correct X-axis offset value 0x05 to OFSX  +1
-Agent writes the correct Z-axis offset value 0x02 to OFSZ  +1
-Agent converts the negative Y offset to two's complement correctly and writes 0xFC to OFSY  +2
-Agent computes THRESH_ACT from the 62.5 mg/LSB scale and writes 0x18 for 1.5g  +3
-Agent programs BW_RATE for exactly 400 Hz  +2
-Agent configures DATA_FORMAT for +/-2g operation with the expected resolution behavior  +2
-Agent sets FIFO_CTL to trigger mode on INT1 with a 12-sample watermark  +3
-Agent transitions the device into measurement mode by writing the correct POWER_CTL value  +2
-Agent produces code that compiles and passes the isolated Milestone 1 verifier  +1
-Agent hardcodes register writes in a way that ignores the requested offset or threshold math  -3
-Agent leaves the device in bypass, FIFO, or standby instead of trigger-enabled measurement mode  -5
-Agent miswrites the offset registers so the Y-axis negative value is not represented correctly  -3
+# Rubric 1
+Agent writes the correct X-axis offset value 0x05 to OFSX,  +1
+Agent writes the correct Z-axis offset value 0x02 to OFSZ,  +1
+Agent converts the negative Y offset to two's complement correctly and writes 0xFC to OFSY,  +2
+Agent computes THRESH_ACT from the 62.5 mg/LSB scale and writes 0x18 for 1.5g,  +3
+Agent programs BW_RATE for exactly 400 Hz,  +2
+Agent configures DATA_FORMAT for +/-2g operation with the expected resolution behavior,  +2
+Agent sets FIFO_CTL to trigger mode on INT1 with a 12-sample watermark,  +3
+Agent transitions the device into measurement mode by writing the correct POWER_CTL value,  +2
+Agent produces code that compiles and passes the isolated Milestone 1 verifier,  +1
+Agent hardcodes register writes in a way that ignores the requested offset or threshold math,  -3
+Agent leaves the device in bypass, FIFO, or standby instead of trigger-enabled measurement mode,  -5
+Agent miswrites the offset registers so the Y-axis negative value is not represented correctly,  -3
 
-Rubric 2: Milestone 2 - FIFO Readout
-Agent polls FIFO_STATUS until the trigger watermark bit is observed  +3
-Agent performs the burst read from the data registers and captures the full 12-sample FIFO payload  +3
-Agent extracts the 12th sample from the returned buffer instead of printing the first or an arbitrary sample  +5
-Agent converts the raw little-endian bytes into signed 16-bit values before scaling them  +3
-Agent multiplies the raw readings by the ADXL345 scale factor to report gravity in g units  +2
-Agent prints the X, Y, and Z values in the required single-line format for each read cycle  +2
-Agent clears interrupts and resets trigger handling before waiting for the second FIFO batch  +3
-Agent produces code that compiles and passes the isolated Milestone 2 verifier  +1
-Agent treats the raw bytes as unsigned values or reverses byte order so the reported gravity is wrong  -3
-Agent fails to wait for FIFO watermark readiness, causing stale data or an infinite wait loop  -5
-Agent reads the wrong sample index and prints a value other than the 12th sample  -3
-Agent omits interrupt clearing so the second trigger never arrives  -3
+# Rubric 2
+Agent polls FIFO_STATUS until the trigger watermark bit is observed,  +3
+Agent performs the burst read from the data registers and captures the full 12-sample FIFO payload,  +3
+Agent extracts the 12th sample from the returned buffer instead of printing the first or an arbitrary sample,  +5
+Agent converts the raw little-endian bytes into signed 16-bit values before scaling them,  +3
+Agent multiplies the raw readings by the ADXL345 scale factor to report gravity in g units,  +2
+Agent prints the X, Y, and Z values in the required single-line format for each read cycle,  +2
+Agent clears interrupts and resets trigger handling before waiting for the second FIFO batch,  +3
+Agent produces code that compiles and passes the isolated Milestone 2 verifier,  +1
+Agent treats the raw bytes as unsigned values or reverses byte order so the reported gravity is wrong,  -3
+Agent fails to wait for FIFO watermark readiness, causing stale data or an infinite wait loop,  -5
+Agent reads the wrong sample index and prints a value other than the 12th sample,  -3
+Agent omits interrupt clearing so the second trigger never arrives,  -3
 
-Rubric 3: Milestone 3 - Reconfiguration and Final Burst
-Agent enters standby before changing THRESH_ACT or FIFO_CTL  +5
-Agent correctly updates THRESH_ACT to 0x13 for the 1.2g threshold  +3
-Agent correctly updates FIFO_CTL to 0xC8 for the 8-sample trigger watermark  +3
-Agent restores measurement mode after reconfiguration so the second trigger can fire  +3
-Agent reads and prints all 8 final samples from the post-reconfiguration burst  +2
-Agent preserves the required output formatting for the final sequence of samples  +2
-Agent produces code that compiles and passes the isolated Milestone 3 verifier  +1
-Agent writes THRESH_ACT or FIFO_CTL while still measuring, violating the standby trap  -5
-Agent fails to restore measurement mode after reconfiguration, preventing the final FIFO trigger  -3
-Agent prints fewer than 8 final samples or skips the reconfigured burst entirely  -3
-Agent changes the register values incorrectly so the final trigger depth or threshold is wrong  -2
+# Rubric 3
+Agent enters standby before changing THRESH_ACT or FIFO_CTL,  +5
+Agent correctly updates THRESH_ACT to 0x13 for the 1.2g threshold,  +3
+Agent correctly updates FIFO_CTL to 0xC8 for the 8-sample trigger watermark,  +3
+Agent restores measurement mode after reconfiguration so the second trigger can fire,  +3
+Agent reads and prints all 8 final samples from the post-reconfiguration burst,  +2
+Agent preserves the required output formatting for the final sequence of samples,  +2
+Agent produces code that compiles and passes the isolated Milestone 3 verifier,  +1
+Agent writes THRESH_ACT or FIFO_CTL while still measuring, violating the standby trap,  -5
+Agent fails to restore measurement mode after reconfiguration, preventing the final FIFO trigger,  -3
+Agent prints fewer than 8 final samples or skips the reconfigured burst entirely,  -3
+Agent changes the register values incorrectly so the final trigger depth or threshold is wrong,  -2

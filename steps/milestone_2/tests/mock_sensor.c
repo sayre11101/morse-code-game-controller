@@ -115,6 +115,7 @@ static int adxl345_emul_transfer_i2c(const struct emul *target,
             }
             fifo_poll_count++;
         } else if (reg == 0x30 && msg1->len == 1) {
+            printf("Read 0x30 (INT_SOURCE cleared)\n");
             msg1->buf[0] = 0x80;
             if (current_stage == 1 && fifo_read_index >= active_fifo_size) {
                 current_stage = 2;

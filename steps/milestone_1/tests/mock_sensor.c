@@ -8,34 +8,20 @@
 #include <stdbool.h>
 #include <string.h>
 #include <errno.h>
-#include "adxl_regs.h"
 
 static uint8_t reg_power_ctl = 0;
 static uint8_t reg_thresh_act = 0;
-static uint8_t reg_act_inact = 0;
 static uint8_t reg_fifo_ctl = 0;
 static int current_stage = 1;
 static int fifo_read_index = 0;
 static int fifo_poll_count = 0;
-static int active_fifo_size = 12;
-static uint64_t trigger_ready_cycle = 0;
-static bool require_trigger_settle = false;
 
 static uint8_t current_fifo[12][6] = {0};
 
-#define FINAL_RAW_X 400
-#define FINAL_RAW_Y -188
-#define FINAL_RAW_Z 300
-
 static void generate_batch(int size, float target_g)
 {
-    ARG_UNUSED(target_g);
-
     fifo_read_index = 0;
     fifo_poll_count = 0;
-    active_fifo_size = size;
-    trigger_ready_cycle = 0;
-    require_trigger_settle = false;
 
     for (int i = 0; i < size; i++) {
         int16_t raw_x;
@@ -47,9 +33,10 @@ static void generate_batch(int size, float target_g)
             raw_y = (rand() % 25) - 12;
             raw_z = (rand() % 25) - 12;
         } else {
-            raw_x = FINAL_RAW_X;
-            raw_y = FINAL_RAW_Y;
-            raw_z = FINAL_RAW_Z;
+            int16_t base_spike = (int16_t)(target_g / 0.004f);
+            raw_x = base_spike;
+            raw_y = (int16_t)(-0.50f / 0.004f);
+            raw_z = (int16_t)(1.99f / 0.004f);
         }
 
         current_fifo[i][0] = raw_x & 0xFF;
@@ -87,9 +74,6 @@ static int adxl345_emul_transfer_i2c(const struct emul *target,
         case 0x24:
             reg_thresh_act = val;
             break;
-        case ADXL345_REG_ACT_INACT_CTL:
-            reg_act_inact = val;
-            break;
         case 0x38:
             reg_fifo_ctl = val;
             break;
@@ -108,15 +92,11 @@ static int adxl345_emul_transfer_i2c(const struct emul *target,
             msg1->buf[0] = 0xE5;
         } else if (reg == 0x39 && msg1->len == 1) {
             printf("Read 0x39 (FIFO polled)\n");
-            msg1->buf[0] = (fifo_poll_count >= 2 && reg_act_inact == 0x40) ? (uint8_t)(0x80 | active_fifo_size) : 0x00;
-            if ((msg1->buf[0] & 0x80) != 0) {
-                trigger_ready_cycle = k_cycle_get_64();
-                require_trigger_settle = true;
-            }
+            msg1->buf[0] = (fifo_poll_count >= 2) ? 0x80 : 0x00;
             fifo_poll_count++;
         } else if (reg == 0x30 && msg1->len == 1) {
             msg1->buf[0] = 0x80;
-            if (current_stage == 1 && fifo_read_index >= active_fifo_size) {
+            if (current_stage == 1 && fifo_read_index >= 12) {
                 current_stage = 2;
                 generate_batch(12, 1.6f);
             }
@@ -125,17 +105,9 @@ static int adxl345_emul_transfer_i2c(const struct emul *target,
                 return -EIO;
             }
 
-            if (require_trigger_settle) {
-                uint64_t elapsed_us = k_cyc_to_us_floor64(k_cycle_get_64() - trigger_ready_cycle);
-                if (elapsed_us < 5) {
-                    return -EIO;
-                }
-                require_trigger_settle = false;
-            }
-
             memset(msg1->buf, 0, msg1->len);
 
-            if (fifo_read_index < active_fifo_size) {
+            if (fifo_read_index < 12) {
                 memcpy(msg1->buf, current_fifo[fifo_read_index], 6);
                 fifo_read_index++;
             }

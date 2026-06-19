@@ -60,9 +60,11 @@ WORKDIR /app
 COPY main.c /app/
 COPY adxl345_setup.c /app/
 COPY adxl345_read.c /app/
+COPY adxl345.pdf /app/
 
 # Copy the mock environment and headers
-COPY mock_sensor.c /app/
+COPY mock_sensor.c /app/mock_sensor.c
+COPY mock_sensor.c /app/mock_sensor.c.orig
 COPY adxl_regs.h /app/
 COPY headers/ /app/headers/
 

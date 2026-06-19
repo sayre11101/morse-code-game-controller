@@ -1,5 +1,15 @@
-# Milesone 3
+# Milestone 3
 
-You must integrate the configuration and reading functions to respond to changing conditions. Open the main.c file and implement the primary control loop. First, execute your initialization and the two initial 12-sample reads. Next, you must reconfigure the sensor on the fly to detect a new activity threshold of 1.2g and change the FIFO watermark to 8 samples. Wait for the new trigger, download the 8 samples, and print all 8 samples on 8 separate lines using the exact same formatting as the previous reads.
+Integrate setup and read behavior in `main.c` for a mid-run reconfiguration scenario.
 
-Important. The recommended procedure is to put the device into low power standby before updating thresholds or other control registers. The test harness checks that you do this in between tests where the control registers are changed.
+Use the ADXL345 datasheet at `/app/adxl345.pdf` to determine the required register names, register addresses, bit configurations, timing requirements, and order of operations for reconfiguration, standby/measurement transitions, and FIFO reads.
+
+Requirements:
+
+- Run the existing initialization sequence and the two milestone-2 read cycles.
+- Reconfigure for a new activity threshold of `1.2g` and FIFO trigger watermark of `8` samples.
+- Before modifying THRESH_ACT or FIFO_CTL registers, follow the datasheet recommendation: place the device in low power standby mode.
+- Wait for the new trigger condition, read 8 FIFO entries as complete 6-byte X/Y/Z samples, and print all 8 samples.
+- After the trigger condition is reached check the datasheet for timing of the next I2C read
+- Each FIFO entry must be read with its own 6-byte DATAX0 transaction. 
+- Use the same per-line output format as milestone 2: `X: [val] g, Y: [val] g, Z: [val] g`.

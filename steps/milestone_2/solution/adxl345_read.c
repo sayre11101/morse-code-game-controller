@@ -6,7 +6,6 @@
 #include "adxl_regs.h"
 
 #define I2C_NODE DT_NODELABEL(i2c0)
-#define ADXL345_ADDR 0x53
 
 #define SCALE_FACTOR 0.004f // 4mg/LSB
 
@@ -16,20 +15,26 @@ void adxl345_read_samples(void) {
 
     uint8_t status = 0;
     
-    // 1. Poll FIFO_STATUS (0x39) until the trigger/watermark is reached (bit 7 is set)
+    // 1. Poll FIFO_STATUS until the trigger/watermark is reached (bit 7 is set)
     do {
-        i2c_reg_read_byte(i2c_dev, ADXL345_ADDR, 0x39, &status);
+        i2c_reg_read_byte(i2c_dev, ADXL345_ADDR, ADXL345_REG_FIFO_STATUS, &status);
         k_sleep(K_MSEC(10)); // Yield to prevent watchdog timeout
     } while ((status & 0x80) == 0);
 
-    // 2. Burst read 12 samples (6 bytes per sample * 12 = 72 bytes)
-    uint8_t buffer[72];
-    i2c_burst_read(i2c_dev, ADXL345_ADDR, 0x32, buffer, 72);
+    k_usleep(5);
 
-    // 3. Extract the 12th sample (bytes 66 through 71)
-    int16_t raw_x = (int16_t)((buffer[67] << 8) | buffer[66]);
-    int16_t raw_y = (int16_t)((buffer[69] << 8) | buffer[68]);
-    int16_t raw_z = (int16_t)((buffer[71] << 8) | buffer[70]);
+    // 2. Read 12 FIFO entries as complete 6-byte X/Y/Z samples.
+    uint8_t sample[6] = {0};
+    int16_t raw_x = 0;
+    int16_t raw_y = 0;
+    int16_t raw_z = 0;
+
+    for (int i = 0; i < 12; i++) {
+        i2c_burst_read(i2c_dev, ADXL345_ADDR, ADXL345_REG_DATAX0, sample, sizeof(sample));
+        raw_x = (int16_t)((sample[1] << 8) | sample[0]);
+        raw_y = (int16_t)((sample[3] << 8) | sample[2]);
+        raw_z = (int16_t)((sample[5] << 8) | sample[4]);
+    }
 
     // 4. Convert to gravity floats
     float x_g = raw_x * SCALE_FACTOR;
@@ -37,9 +42,13 @@ void adxl345_read_samples(void) {
     float z_g = raw_z * SCALE_FACTOR;
 
     // 5. Print formatting
-    printf("X: %.2f, Y: %.2f, Z: %.2f\n", x_g, y_g, z_g);
+    printf("X: %.2f g, Y: %.2f g, Z: %.2f g\n", x_g, y_g, z_g);
 
-    // 6. Clear interrupts by reading INT_SOURCE (0x30)
+    // 6. Clear interrupts by reading INT_SOURCE
     uint8_t dummy;
-    i2c_reg_read_byte(i2c_dev, ADXL345_ADDR, 0x30, &dummy);
+    i2c_reg_read_byte(i2c_dev, ADXL345_ADDR, ADXL345_REG_INT_SOURCE, &dummy);
+
+    // Datasheet trigger reset: switch FIFO to bypass, then back to trigger.
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, ADXL345_REG_FIFO_CTL, 0x00);
+    i2c_reg_write_byte(i2c_dev, ADXL345_ADDR, ADXL345_REG_FIFO_CTL, 0xCC);
 }

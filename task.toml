@@ -5,10 +5,10 @@ version = "2.0"
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "unknown"
-category = "software-engineering"
+difficulty = "hard"
+category = "build-and-dependency-management"
 # Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
-subcategories = ["api_integration"]
+subcategories = ["tool_specific"]
 # Total milestone count — must match the number of [[steps]] blocks below
 number_of_milestones = 3
 # Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files
