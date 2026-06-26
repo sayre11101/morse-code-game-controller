@@ -13,8 +13,25 @@ if [ ! -f /app/adxl345.pdf ]; then
   exit 1
 fi
 
+if [ ! -f /app/morse-code-sheet.pdf ]; then
+  echo "ERROR: Missing required reference /app/morse-code-sheet.pdf"
+  echo 0 > /logs/verifier/reward.txt
+  exit 1
+fi
+
 # Save backup of the dummy non-revealing mock, then inject the verifier-only mock.
 cp /tests/mock_sensor.c /app/mock_sensor.c
+
+# Pick a random target word (3-6 letters) for this verifier run.
+MORSE_TARGET_WORD="$(python3 - <<'PY'
+import secrets
+
+word_bank = ["SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"]
+print(secrets.choice(word_bank))
+PY
+)"
+export MORSE_TARGET_WORD
+echo "Verifier target word: $MORSE_TARGET_WORD"
 
 set +e
 python -m pytest \
@@ -27,6 +44,19 @@ PYTEST_RC=$?
 if ! cp /app/mock_sensor.c.orig /app/mock_sensor.c; then
   echo "ERROR: Failed to restore dummy mock for next milestone"
   PYTEST_RC=1
+fi
+
+# Restore baseline starter main.c to avoid carrying milestone solution forward.
+if [ -f /tests/main.c.baseline ]; then
+  if ! cp /tests/main.c.baseline /app/main.c; then
+    echo "ERROR: Failed to restore baseline main.c for next milestone"
+    PYTEST_RC=1
+  fi
+else
+  if ! cp /app/main.c.orig /app/main.c; then
+    echo "ERROR: Failed to restore baseline main.c for next milestone"
+    PYTEST_RC=1
+  fi
 fi
 
 test "$PYTEST_RC" -eq 0

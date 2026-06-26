@@ -58,15 +58,14 @@ WORKDIR /app
 
 # Copy the core application files
 COPY main.c /app/
-COPY adxl345_setup.c /app/
-COPY adxl345_read.c /app/
+COPY main.c /app/main.c.orig
 COPY adxl345.pdf /app/
+COPY morse-code-sheet.pdf /app/
 
 # Copy the mock environment and headers
 COPY mock_sensor.c /app/mock_sensor.c
 COPY mock_sensor.c /app/mock_sensor.c.orig
 COPY adxl_regs.h /app/
-COPY headers/ /app/headers/
 
 # Copy the Zephyr build configuration
 COPY CMakeLists.txt /app/

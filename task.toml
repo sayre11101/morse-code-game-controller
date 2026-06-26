@@ -5,12 +5,12 @@ version = "2.0"
 [metadata]
 author_name = "anonymous"
 author_email = "anonymous"
-difficulty = "hard"
-category = "build-and-dependency-management"
+difficulty = "medium"
+category = "scientific-computing"
 # Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
 subcategories = ["tool_specific"]
 # Total milestone count — must match the number of [[steps]] blocks below
-number_of_milestones = 3
+number_of_milestones = 2
 # Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files
 codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
@@ -41,16 +41,6 @@ timeout_sec = 450.0
 # Milestone 2
 [[steps]]
 name = "milestone_2"
-
-[steps.agent]
-timeout_sec = 900.0
-
-[steps.verifier]
-timeout_sec = 450.0
-
-# Milestone 3
-[[steps]]
-name = "milestone_3"
 
 [steps.agent]
 timeout_sec = 900.0

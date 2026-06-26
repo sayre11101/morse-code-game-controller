@@ -5,6 +5,7 @@ import os
 
 
 BIN_PATH = "build/zephyr/zephyr.exe"
+SOURCE_PATH = "main.c"
 
 
 def _binary_diagnostics():
@@ -46,17 +47,30 @@ def _binary_diagnostics():
     }
 
 
+def _source_snapshot():
+    try:
+        with open(SOURCE_PATH, "r", encoding="utf-8", errors="replace") as source_file:
+            return source_file.read()
+    except OSError as exc:
+        return f"<unable to read {SOURCE_PATH}: {exc}>"
+
+
 def _validate_binary_or_fail():
     diag = _binary_diagnostics()
     if not diag["exists"]:
-        pytest.fail(f"FAIL: Expected compiled binary at {BIN_PATH} but it was not found.")
+        pytest.fail(
+            f"FAIL: Expected compiled binary at {BIN_PATH} but it was not found.\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
+        )
     if not diag["executable"]:
         pytest.fail(
-            f"FAIL: Compiled binary exists but is not executable ({BIN_PATH}). file: {diag['file_out']}"
+            f"FAIL: Compiled binary exists but is not executable ({BIN_PATH}). file: {diag['file_out']}\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
         )
     if "ELF" not in diag["file_out"]:
         pytest.fail(
-            f"FAIL: Compiled binary is not ELF ({BIN_PATH}). file: {diag['file_out']}"
+            f"FAIL: Compiled binary is not ELF ({BIN_PATH}). file: {diag['file_out']}\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
         )
 
 
@@ -73,6 +87,25 @@ def _tail_lines(text, line_count=40):
     if len(lines) <= line_count:
         return "\n".join(lines)
     return "\n".join(lines[-line_count:])
+
+
+def _extract_decoded_message_candidates(output_text):
+    """Return candidate decoded-message lines from mixed Zephyr/mock output."""
+    lines = [line.strip() for line in output_text.splitlines() if line.strip()]
+
+    # Drop known non-message log formats emitted by Zephyr and the mock sensor.
+    excluded_prefixes = (
+        "[",
+        "uart connected to pseudotty",
+        "*** Booting Zephyr",
+        "Write 0x",
+        "Read 0x",
+    )
+
+    return [
+        line for line in lines
+        if not line.startswith(excluded_prefixes)
+    ]
 
 @pytest.fixture(scope="module", autouse=True)
 def build_zephyr():
@@ -92,7 +125,8 @@ def build_zephyr():
         text=True,
     )
     assert build_res.returncode == 0, (
-        f"FAIL: Zephyr Build Failed:\n{build_res.stderr}\n\nSTDOUT:\n{build_res.stdout}"
+        f"FAIL: Zephyr Build Failed:\n{build_res.stderr}\n\nSTDOUT:\n{build_res.stdout}\n\n"
+        f"{SOURCE_PATH}:\n{_source_snapshot()}"
     )
     yield
 # -----------------------------------
@@ -103,39 +137,25 @@ def zephyr_output():
     _validate_binary_or_fail()
     try:
         result = subprocess.run(
-            [BIN_PATH], 
-            capture_output=True, 
-            text=True, 
-            timeout=120
+            [BIN_PATH],
+            capture_output=True,
+            text=True,
+            timeout=120,
         )
         return result.stdout
     except subprocess.TimeoutExpired as exc:
         partial_output = _normalize_timeout_output(exc.stdout or exc.output)
-        fifo_polls = partial_output.count("Read 0x39")
-        int_clears = partial_output.count("Read 0x30 (INT_SOURCE cleared)")
-        formatted_lines = re.findall(
-            r"X:\s*([+-]?\d+\.\d+)\s*g,\s*Y:\s*([+-]?\d+\.\d+)\s*g,\s*Z:\s*([+-]?\d+\.\d+)\s*g",
-            partial_output,
-        )
-
-        if fifo_polls > 0 and len(formatted_lines) == 0:
-            likely_cause = (
-                "Likely cause: the code is polling FIFO but never reaches the trigger/read path "
-                "(for example, waiting on the wrong FIFO condition)."
-            )
-        else:
-            likely_cause = "Likely cause: infinite polling loop or missing trigger reset path."
-
         pytest.fail(
             "FAIL: Program timed out after 120s.\n"
-            f"Diagnostics: FIFO polls={fifo_polls}, INT_SOURCE clears={int_clears}, "
-            f"formatted output lines={len(formatted_lines)}.\n"
-            f"{likely_cause}\n\n"
-            "Captured stdout tail:\n"
-            f"{_tail_lines(partial_output)}"
+            "Expected: Morse-decoded message as plain text output.\n"
+            f"Captured stdout tail:\n{_tail_lines(partial_output)}\n\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
         )
     except FileNotFoundError:
-        pytest.fail("FAIL: Could not find the compiled binary.")
+        pytest.fail(
+            "FAIL: Could not find the compiled binary.\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
+        )
     except OSError as exc:
         diag = _binary_diagnostics()
         pytest.fail(
@@ -143,62 +163,57 @@ def zephyr_output():
             f"Details: {exc}\n"
             f"Binary: {BIN_PATH}\n"
             f"file: {diag['file_out']}\n"
-            f"uname -m: {diag['uname_out']}"
+            f"uname -m: {diag['uname_out']}\n\n"
+            f"{SOURCE_PATH}:\n{_source_snapshot()}"
         )
 
-def test_fifo_polling_loop(zephyr_output):
-    """Verifies that the agent is actively polling the FIFO_STATUS register."""
-    output_lower = zephyr_output.lower()
-    poll_detected = output_lower.count("read 0x39") >= 4
-    assert poll_detected, "FAIL: No evidence of the FIFO status register being polled."
-
-def test_interrupt_clear_between_cycles(zephyr_output):
-    clears = len(re.findall(r"^Read 0x30", zephyr_output, re.MULTILINE))
-    assert clears >= 2, "FAIL: Expected INT_SOURCE to be read in both trigger cycles."
-
-
-def test_fifo_reset_between_cycles(zephyr_output):
-    """Verifies trigger handling is re-armed between cycles via FIFO_CTL reset sequence."""
-    reset_positions = [m.start() for m in re.finditer(r"^Write 0x38 -> 0x00$", zephyr_output, re.MULTILINE)]
-    trigger_positions = [m.start() for m in re.finditer(r"^Write 0x38 -> 0xCC$", zephyr_output, re.MULTILINE)]
-
-    assert len(reset_positions) >= 1, (
-        "FAIL: Expected at least one FIFO_CTL reset write (0x38 -> 0x00) between trigger cycles."
-    )
-
-    assert len(trigger_positions) >= 2, (
-        "FAIL: Expected FIFO trigger mode (0x38 -> 0xCC) to be written at setup and re-armed before the second cycle."
-    )
-
-    first_reset = reset_positions[0]
-    later_triggers = [pos for pos in trigger_positions if pos > first_reset]
-    assert later_triggers, (
-        "FAIL: FIFO trigger mode was not re-enabled after FIFO_CTL reset; expected 0xCC write after 0x00."
+def test_output_exists(zephyr_output):
+    """Verify that the program produced some output."""
+    candidates = _extract_decoded_message_candidates(zephyr_output)
+    msg_line = candidates[-1] if candidates else None
+    assert msg_line is not None and len(msg_line) > 0, (
+        "FAIL: No decoded message output found."
     )
 
 
-def test_two_cycle_output_format_and_values(zephyr_output):
-    """Verify line format and plausible gravity-unit values for both trigger cycles."""
-    line_pattern = r"X:\s*([+-]?\d+\.\d+)\s*g,\s*Y:\s*([+-]?\d+\.\d+)\s*g,\s*Z:\s*([+-]?\d+\.\d+)\s*g"
-    matches = re.findall(line_pattern, zephyr_output)
+def test_output_is_text(zephyr_output):
+    """Verify output is strict decoded text (A-Z only) and exactly one user line."""
+    candidates = _extract_decoded_message_candidates(zephyr_output)
+    assert len(candidates) == 1, (
+        "FAIL: Expected exactly one decoded-message line and no extra user-facing output. "
+        f"Found {len(candidates)} candidate lines: {candidates}"
+    )
+    msg_line = candidates[0]
+    assert bool(re.fullmatch(r'[A-Za-z]+', msg_line)), (
+        f"FAIL: Output '{msg_line}' contains non-letter characters. "
+        "Expected only alphabetic characters in the decoded message line."
+    )
 
-    assert len(matches) >= 2, "FAIL: Expected two formatted output lines (two trigger cycles)."
 
-    non_trivial_axes = 0
-    for idx, (x_str, y_str, z_str) in enumerate(matches[:2], start=1):
-        x_val = float(x_str)
-        y_val = float(y_str)
-        z_val = float(z_str)
+def test_output_length_reasonable(zephyr_output):
+    """Verify decoded message has reasonable length (not empty, not > 100 chars)."""
+    candidates = _extract_decoded_message_candidates(zephyr_output)
+    assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
+    msg_line = candidates[0]
+    msg_len = len(msg_line)
+    assert 3 <= msg_len <= 6, (
+        f"FAIL: Output length {msg_len} is outside expected range (3-6 chars). "
+        f"Output: '{msg_line}'"
+    )
 
-        # Values should be in g-units and within a plausible accelerometer output range.
-        assert abs(x_val) <= 4.0, f"FAIL: Cycle {idx} X axis value {x_val}g is outside plausible g-range."
-        assert abs(y_val) <= 4.0, f"FAIL: Cycle {idx} Y axis value {y_val}g is outside plausible g-range."
-        assert abs(z_val) <= 4.0, f"FAIL: Cycle {idx} Z axis value {z_val}g is outside plausible g-range."
 
-        non_trivial_axes += int(abs(x_val) > 0.05)
-        non_trivial_axes += int(abs(y_val) > 0.05)
-        non_trivial_axes += int(abs(z_val) > 0.05)
+def test_decoded_message_matches_expected_word(zephyr_output):
+    """Verify decoded output matches the verifier-selected target word exactly."""
+    candidates = _extract_decoded_message_candidates(zephyr_output)
+    assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
+    msg_line = candidates[0]
 
-    assert non_trivial_axes >= 2, (
-        "FAIL: Output appears trivial/constant; expected meaningful converted sample values in both cycles."
+    expected = os.environ.get("MORSE_TARGET_WORD", "").strip().upper()
+    assert re.fullmatch(r"[A-Z]{3,6}", expected), (
+        f"FAIL: Verifier expected word is invalid: '{expected}'."
+    )
+
+    actual = msg_line.strip().upper()
+    assert actual == expected, (
+        f"FAIL: Decoded message mismatch. Expected '{expected}', got '{actual}'."
     )

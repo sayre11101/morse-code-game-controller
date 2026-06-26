@@ -1,0 +1,14 @@
+Copy: TASK_DIR='morse-code-game-controller' copied to CLEAN_DIR='/tmp/clean-task'
+Command: stb submissions update "/tmp/clean-task" -s "471d664d-2bc5-4624-be6e-ff02367aef29" --time "300"
+
+🔄 Updating submission
+   Submission ID: 471d664d-2bc5-4624-be6e-ff02367aef29
+   From folder: /tmp/clean-task
+   Project: Terminus-2nd-Edition (bfe79c33-8ab0-4061-9849-08d3207c9927)
+
+📦 Zipping folder contents...
+✓ Created zip file: /tmp/clean-task.zip
+   Size: 1621.75 KB
+
+📤 Uploading...
+⏳ Running checks...
