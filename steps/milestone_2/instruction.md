@@ -24,6 +24,7 @@ For this task, the key-press timings are fixed:
 - **Final UP hold** (end of message): UP for ~5000 ms
 
 Use these thresholds to classify DOWN durations (< 240 ms → dot, ≥ 240 ms → dash) and UP durations (< 240 ms → continue letter, 240–3000 ms → new letter, ≥ 4500 ms → end of message).
+
 ## Implementation Guardrails
 
 - Use a single state machine driven by transitions between settled DOWN and settled UP.
@@ -36,6 +37,7 @@ Use these thresholds to classify DOWN durations (< 240 ms → dot, ≥ 240 ms �
 - Keep stdout clean: the decoded message line must be the only user-facing output line from your program during milestone 2.
 
 Reference flow for each completed press/release cycle:
+
 1. DOWN starts: remember `down_start`.
 2. DOWN ends (transition to UP): `down_dur = now - down_start`, append `.` or `-`.
 3. While UP continues: `up_dur = now - up_start`.

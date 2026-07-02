@@ -9,6 +9,7 @@ SOURCE_PATH = "main.c"
 
 
 def _binary_diagnostics():
+    """Return file-type and architecture diagnostics for the compiled binary."""
     file_out = "<unavailable>"
     uname_out = "<unavailable>"
     try:
@@ -48,6 +49,7 @@ def _binary_diagnostics():
 
 
 def _source_snapshot():
+    """Read and return the current contents of the agent source file."""
     try:
         with open(SOURCE_PATH, "r", encoding="utf-8", errors="replace") as source_file:
             return source_file.read()
@@ -56,10 +58,12 @@ def _source_snapshot():
 
 
 def _with_source(message):
+    """Append the current source file contents to a failure message string."""
     return f"{message}\n\n{SOURCE_PATH}:\n{_source_snapshot()}"
 
 
 def _validate_binary_or_fail():
+    """Fail the test immediately if the compiled binary is missing, non-executable, or not ELF."""
     diag = _binary_diagnostics()
     if not diag["exists"]:
         pytest.fail(
@@ -105,6 +109,7 @@ def build_zephyr():
 # Run the binary once and share output across tests.
 @pytest.fixture(scope="module")
 def zephyr_output(build_zephyr):
+    """Run the compiled binary once and return its stdout for all tests to share."""
     _validate_binary_or_fail()
     try:
         result = subprocess.run(
@@ -139,6 +144,7 @@ STATE_LINE = re.compile(r"^(TRAVEL_DOWN|DOWN|TRAVEL_UP|UP)\s+([+-]?\d+(?:\.\d+)?
 
 
 def _parse_timeline(output_text):
+    """Parse state-duration lines and END marker from program stdout into a structured list."""
     state_entries = []
     end_seen = False
 
@@ -161,6 +167,7 @@ def _parse_timeline(output_text):
 
 
 def _drop_optional_leading_up(entries):
+    """Remove an optional leading UP entry if the session started mid-hold."""
     if not entries:
         return entries
     if entries[0][0] == "UP" and len(entries) >= 2 and entries[1][0] == "TRAVEL_DOWN":

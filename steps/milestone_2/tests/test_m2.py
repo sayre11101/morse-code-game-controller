@@ -9,6 +9,7 @@ SOURCE_PATH = "main.c"
 
 
 def _binary_diagnostics():
+    """Return file-type and architecture diagnostics for the compiled binary."""
     file_out = "<unavailable>"
     uname_out = "<unavailable>"
     try:
@@ -48,6 +49,7 @@ def _binary_diagnostics():
 
 
 def _source_snapshot():
+    """Read and return the current contents of the agent source file."""
     try:
         with open(SOURCE_PATH, "r", encoding="utf-8", errors="replace") as source_file:
             return source_file.read()
@@ -56,6 +58,7 @@ def _source_snapshot():
 
 
 def _validate_binary_or_fail():
+    """Fail the test immediately if the compiled binary is missing, non-executable, or not ELF."""
     diag = _binary_diagnostics()
     if not diag["exists"]:
         pytest.fail(
@@ -75,6 +78,7 @@ def _validate_binary_or_fail():
 
 
 def _normalize_timeout_output(raw_output):
+    """Decode raw timeout output bytes or None into a plain string."""
     if raw_output is None:
         return ""
     if isinstance(raw_output, bytes):
@@ -83,6 +87,7 @@ def _normalize_timeout_output(raw_output):
 
 
 def _tail_lines(text, line_count=40):
+    """Return the last line_count lines of text as a single string."""
     lines = text.splitlines()
     if len(lines) <= line_count:
         return "\n".join(lines)
@@ -134,6 +139,7 @@ def build_zephyr():
 # Run the compiled binary once for all tests in this module
 @pytest.fixture(scope="module")
 def zephyr_output():
+    """Run the compiled binary once and return its stdout for all tests to share."""
     _validate_binary_or_fail()
     try:
         result = subprocess.run(
