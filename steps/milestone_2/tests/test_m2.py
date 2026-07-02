@@ -104,7 +104,7 @@ def _extract_decoded_message_candidates(output_text):
 
     return [
         line for line in lines
-        if not line.startswith(excluded_prefixes)
+        if line.startswith(excluded_prefixes) is False
     ]
 
 @pytest.fixture(scope="module", autouse=True)

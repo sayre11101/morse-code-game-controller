@@ -1,0 +1,27 @@
+I’m working on a different Snorkel project (unrelated domain), but same eval workflow style.
+Please treat this as a fresh code/task context and first do harness discovery.
+
+Context:
+
+Run command: stb harbor run -a oracle -p .
+Jobs root: jobs
+I want quick triage from latest run:
+parent jobs/<timestamp>/result.json
+per-trial verifier/test-stdout.txt
+per-trial verifier/ctrf.json
+per-trial verifier/reward.txt
+Distinguish:
+harness/infra failures (build, timeout, script behavior)
+model/solution failures (assertions, wrong output)
+If tests are parameterized, report per-case outcomes explicitly from stdout (not only summary JSON).
+If you patch tests/harness:
+keep reward-file behavior robust on failure paths
+keep failure messages explicit and actionable
+run syntax checks after edits (bash -n, py_compile, collect-only as needed)
+Deliverables I want in order:
+
+Current failure map (severity-first, with file references)
+Root cause hypotheses
+Minimal patch plan
+Implement + validate
+Re-run and report deltas only

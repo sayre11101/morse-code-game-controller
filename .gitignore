@@ -1,4 +1,5 @@
 # Zephyr & CMake Build Artifacts
+**/bak/
 build/
 bak/
 .cache/

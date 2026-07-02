@@ -8,8 +8,6 @@ The key includes an ADXL345 accelerometer. This is a Zephyr project that communi
 
 Use Zephyr I2C register and burst APIs to communicate with the sensor. The expected interface is register-based I2C access through functions such as i2c_reg_write_byte, i2c_reg_read_byte, and i2c_burst_read.
 
-Note on register constants: `adxl_regs.h` provides register addresses, but may not provide every symbolic bit-field macro. It is acceptable to configure ADXL345 registers using explicit hex values (for example `DATA_FORMAT = 0x0B`, `POWER_CTL = 0x08`) when symbolic macros are unavailable.
-
 **Do NOT use FIFO trigger mode or LINK configuration.** Configure the ADXL345 in simple measurement mode with direct register reads. Because the travel pulse is brief, either sample very quickly or use a simple interrupt/status-based approach without FIFO.
 
 Set ADXL345 `BW_RATE` high enough to observe brief transit pulses. A practical target is at least 800 Hz (`0x0D`), and 1600-3200 Hz (`0x0E`-`0x0F`) is preferred for this task.

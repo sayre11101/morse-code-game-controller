@@ -46,4 +46,4 @@ Assume operator speed in this task is within 8 to 28 words per minute. Decoding 
 
 Your output must be the final decoded message as plain text in the exact expected order. Letter grouping and word grouping must be correct. Extra characters, missing characters, or incorrect spacing make the result incorrect.
 
-This milestone evaluates message decoding accuracy, not just state detection. The produced text must match the verifier input exactly.
+This milestone evaluates message decoding accuracy, not just state detection. The produced text must match the expected message exactly.

@@ -1,8 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 
-# Verifier dependencies are installed in environment/Dockerfile.
-# Add task-specific verifier-only Python packages there, not here.
+# Verifier-only dependencies (pytest, pytest-json-ctrf) are pre-installed in
+# environment/Dockerfile because this task runs offline (allow_internet = false).
 
 mkdir -p /logs/verifier
 

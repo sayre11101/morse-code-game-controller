@@ -19,7 +19,7 @@ Agent outputs exactly one decoded-message line with letters only (no digits, no 
 Agent produces output that matches the expected target word exactly,  +3
 Agent produces decodable output that yields recognizable text,  +2
 Agent produces output with extra user-facing lines beyond the decoded message,  -3
-Agent fails to decode any symbols, producing blank or unrelated output,  -5
+Agent fails to decode any symbols, producing blank or unrelated output,  -
 Agent outputs corrupted character sequence with missing or extra letters,  -3
 Agent outputs non-alphabetic characters or completely misidentifies Morse symbols,  -2
 

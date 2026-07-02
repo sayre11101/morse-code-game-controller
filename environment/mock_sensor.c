@@ -4,8 +4,8 @@
 #include <zephyr/drivers/i2c_emul.h>
 
 /*
- * Agent-visible dummy mock.
- * Verifier steps overwrite /app/mock_sensor.c with private test mocks.
+ * Agent-visible stub implementation of the ADXL345 I2C emulator.
+ * This file provides a no-op sensor backend for compilation purposes.
  */
 
 static int adxl345_dummy_transfer(const struct emul *target,

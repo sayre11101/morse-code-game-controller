@@ -20,15 +20,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* /tmp/* /var/tmp/*
 
 # ---------------------------------------------------------
-# 2. install pytest
+# 2. Install verifier test dependencies
 # ---------------------------------------------------------
+# pytest and pytest-json-ctrf are verifier-only; pre-installed here because
+# the task runs offline (allow_internet = false) so test.sh cannot pip-install.
 RUN pip3 install --no-cache-dir pytest==8.4.1 pytest-json-ctrf==0.3.5
 
 # ---------------------------------------------------------
 # 4. Download and Install the Zephyr SDK (MINIMAL VERSION)
 # ---------------------------------------------------------
 # OPTIMIZATIONS: Minimal x86_64 toolchain only, clear /tmp/ after install
+ARG ZEPHYR_SDK_SHA256=933ab6b4cd78dccf8fe0cf59d1b626efc309008408eaf848173c70360f848ee1
 RUN wget -q "https://github.com/zephyrproject-rtos/sdk-ng/releases/download/v${ZEPHYR_SDK_VERSION}/zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz" && \
+    echo "${ZEPHYR_SDK_SHA256}  zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz" | sha256sum -c - && \
     tar -xf zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz -C /opt && \
     mv /opt/zephyr-sdk-${ZEPHYR_SDK_VERSION} /opt/zephyr-sdk && \
     rm zephyr-sdk-${ZEPHYR_SDK_VERSION}_linux-x86_64_minimal.tar.xz && \

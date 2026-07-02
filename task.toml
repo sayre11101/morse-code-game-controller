@@ -6,7 +6,7 @@ version = "2.0"
 author_name = "anonymous"
 author_email = "anonymous"
 difficulty = "medium"
-category = "scientific-computing"
+category = "games"
 # Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
 subcategories = ["tool_specific"]
 # Total milestone count — must match the number of [[steps]] blocks below
@@ -16,8 +16,8 @@ codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
 languages = ["bash", "c"]
 tags = ["embedded", "zephyr", "i2c", "adxl345", "c"] # Estimated time to complete (minutes)
-expert_time_estimate_min = 60
-junior_time_estimate_min = 120
+expert_time_estimate_min = 180
+junior_time_estimate_min = 360
 
 # Sandbox environment limits — applied across all milestones (the same container is shared)
 [environment]
