@@ -8,6 +8,7 @@ bak/
 *.o
 *.out
 *.a
+keys.env
 
 # Python & Pytest Caches
 __pycache__/

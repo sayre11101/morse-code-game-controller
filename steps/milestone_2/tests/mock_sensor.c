@@ -177,13 +177,14 @@ static void update_car_physics(int64_t current_time) {
             }
             break;
         case 5: // hill up (concave up -> positive Z felt force)
+            // min radius 100 meters = 400/100 = 4 m/s^2 (~0.4g max)
             if (car_vel_ms > 5.0) {
-                car_accel_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                car_accel_z = (car_vel_ms * car_vel_ms / 100.0) / 9.8;
             }
             break;
         case 6: // hill down (convex -> negative Z felt force)
             if (car_vel_ms > 5.0) {
-                car_accel_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                car_accel_z = -(car_vel_ms * car_vel_ms / 100.0) / 9.8;
             }
             break;
     }
@@ -236,6 +237,16 @@ bool get_sample_stru(readings_struct_t *readings) {
     // Z axis gets gravity, hill effects, and the actual morse code spikes
     readings->z_acc = z_g + car_accel_z + frand_noise();
     
+    // Apply 1.5g hardware clipping
+    if (readings->x_acc > 1.5) readings->x_acc = 1.5;
+    if (readings->x_acc < -1.5) readings->x_acc = -1.5;
+    
+    if (readings->y_acc > 1.5) readings->y_acc = 1.5;
+    if (readings->y_acc < -1.5) readings->y_acc = -1.5;
+    
+    if (readings->z_acc > 1.5) readings->z_acc = 1.5;
+    if (readings->z_acc < -1.5) readings->z_acc = -1.5;
+
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;
     

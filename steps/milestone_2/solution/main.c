@@ -5,12 +5,6 @@
 
 #include "mock_sensor.h"
 
-// We parse morse code pulses.
-// Spike > 100g in Z axis -> stop DOWN (we hit the bottom)
-// Spike < -100g in Z axis -> stop UP (we hit the top)
-// Time between UP->DOWN is a gap (symbol gap, letter gap, word gap)
-// Time between DOWN->UP is a mark (dot or dash)
-
 #define MAX_PULSES 1000
 
 static const char *morse_dict[26] = {
@@ -34,12 +28,10 @@ char decode_letter(const char *symbols) {
 int main(void) {
     readings_struct_t r;
     
-    // We are interested in states: TRUE=down, FALSE=up
     bool is_down = false;
     
     int64_t last_transition_time = 0;
     
-    // Dynamically calculate unit timing
     int64_t min_mark = 99999999;
     
     struct {
@@ -51,40 +43,48 @@ int main(void) {
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
         
-        bool spike_down = (r.z_acc > 100.0);
-        bool spike_up = (r.z_acc < -100.0);
+        // Use derivative of acceleration to find the stop spikes!
+        // Car movement maxes out around 0.4g force spread out over ~2 seconds.
+        // That's a tiny delta per 100usec sample.
+        // A Morse Key stop generates ~500g in 100usec. Even clipped to 1.5,
+        // it means the absolute check remains highly reliable since driving caps at 0.4g.
         
+        // If the reading pins at closely to the positive 1.5g limit, it's hitting the bottom
+        bool spike_down = (r.z_acc > 1.4);
+        
+        // If the reading pins at closely to the negative 1.5g limit, it's hitting the top.
+        // Even with car physics pushing z_acc to -1.4g, the hit is -1.5g.
+        bool spike_up = (r.z_acc < -1.45);
+        
+        // Use a cooldown or state lock to avoid bouncing on recovery
         if (spike_down && !is_down) {
-            // Transition UP -> DOWN
-            if (last_transition_time > 0) {
-                int64_t gap = current_time - last_transition_time;
-                if (num_pulses < MAX_PULSES) {
+            // Must have been up for at least 1ms to count as a transition
+            if (last_transition_time == 0 || (current_time - last_transition_time > 1000)) {
+                if (last_transition_time > 0) {
                     pulses[num_pulses].is_mark = false;
-                    pulses[num_pulses].duration = gap;
+                    pulses[num_pulses].duration = current_time - last_transition_time;
                     num_pulses++;
                 }
+                is_down = true;
+                last_transition_time = current_time;
             }
-            is_down = true;
-            last_transition_time = current_time;
         } 
         else if (spike_up && is_down) {
-            // Transition DOWN -> UP
-            if (last_transition_time > 0) {
-                int64_t mark = current_time - last_transition_time;
-                if (num_pulses < MAX_PULSES) {
+            // Must have been down for at least 1ms to count as a transition
+            if (last_transition_time == 0 || (current_time - last_transition_time > 1000)) {
+                if (last_transition_time > 0) {
+                    int64_t mark = current_time - last_transition_time;
                     pulses[num_pulses].is_mark = true;
                     pulses[num_pulses].duration = mark;
                     num_pulses++;
+                    if (mark < min_mark) min_mark = mark;
                 }
-                if (mark < min_mark) {
-                    min_mark = mark;
-                }
+                is_down = false;
+                last_transition_time = current_time;
             }
-            is_down = false;
-            last_transition_time = current_time;
         }
         
-        // Check for end hold
+        // End condition hold time
         if (!is_down && last_transition_time > 0) {
             int64_t gap = current_time - last_transition_time;
             if (gap >= 5000000) { // 5 seconds
@@ -95,9 +95,8 @@ int main(void) {
     
     if (num_pulses == 0) return 0;
     
-    // min_mark should represent roughly 1 dot unit.
     int64_t unit_time = min_mark;
-    if (unit_time == 0) unit_time = 150000; // fallback just in case
+    if (unit_time == 0) unit_time = 150000; 
     
     char word[100] = {0};
     int word_idx = 0;
@@ -126,7 +125,6 @@ int main(void) {
         }
     }
     
-    // Flush last letter
     if (symbol_idx > 0) {
         current_letter[symbol_idx] = '\0';
         word[word_idx++] = decode_letter(current_letter);
