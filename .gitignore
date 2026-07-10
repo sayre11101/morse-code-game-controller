@@ -5,8 +5,9 @@ jobs/
 build/
 bak/
 .cache/
-CMakeCache.txt
-CMakeFiles/
+*.o
+*.out
+*.a
 
 # Python & Pytest Caches
 __pycache__/
