@@ -15,7 +15,8 @@ number_of_milestones = 2
 codebase_size = "minimal"
 # Coding languages used in the oracle solution or required by the agent
 languages = ["bash", "c"]
-tags = ["embedded", "zephyr", "i2c", "adxl345", "c"] # Estimated time to complete (minutes)
+tags = ["games", "physics"] 
+# Estimated time to complete (minutes)
 expert_time_estimate_min = 180
 junior_time_estimate_min = 360
 

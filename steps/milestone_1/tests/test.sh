@@ -1,32 +1,30 @@
 #!/bin/bash
 set -uo pipefail
 
-# Verifier-only dependencies (pytest, pytest-json-ctrf) are pre-installed in
-# environment/Dockerfile because this task runs offline (allow_internet = false).
-
 mkdir -p /logs/verifier
 
-# Fail fast if the datasheet PDF was not copied into the container.
-if [ ! -f /app/adxl345.pdf ]; then
-  echo "ERROR: Missing required datasheet /app/adxl345.pdf"
+# Generate a random word index and write to verifier-only file
+echo $((RANDOM % 8)) > /tests/secret_word.txt
+
+# Compile the files
+cp /tests/mock_sensor.c /app/mock_sensor.c
+cd /app
+# Compile binary to /app/app.out
+gcc -Wall -Wextra -O0 -g -I. -o app.out main.c mock_sensor.c -lm
+COMPILE_RC=$?
+
+if [ "$COMPILE_RC" -ne 0 ]; then
+  echo "ERROR: Compilation failed"
   echo 0 > /logs/verifier/reward.txt
   exit 1
 fi
 
-cp /tests/mock_sensor.c /app/mock_sensor.c
-
 set +e
-python -m pytest \
+python3 -m pytest \
     -o cache_dir=/tmp/pytest_cache \
     --ctrf /logs/verifier/ctrf.json \
     /tests/test_m1.py -rA
 PYTEST_RC=$?
-
-# Restore the dummy non-revealing mock for the next milestone
-if ! cp /app/mock_sensor.c.orig /app/mock_sensor.c; then
-  echo "ERROR: Failed to restore dummy mock for next milestone"
-  PYTEST_RC=1
-fi
 
 # Restore baseline starter main.c to avoid carrying milestone solution forward.
 if [ -f /tests/main.c.baseline ]; then

@@ -1,25 +1,51 @@
-#include <zephyr/kernel.h>
-#include <zephyr/device.h>
-#include <zephyr/drivers/i2c.h>
-#include <zephyr/drivers/i2c_emul.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include <errno.h>
-#include <ctype.h>
-#include "adxl_regs.h"
+#include <math.h>
 
-static uint8_t reg_file[0x40];
-static uint32_t prng = 1;
-static int64_t sample_time_us;
+#include "mock_sensor.h"
+
+// Morse Code dictionary for A-Z
+static const char *morse_dict[26] = {
+    ".-",   "-...", "-.-.", "-..",  ".",    // A-E
+    "..-.", "--.",  "....", "..",   ".---", // F-J
+    "-.-",  ".-..", "--",   "-.",   "---",  // K-O
+    ".--.", "--.-", ".-.",  "...",  "-",    // P-T
+    "..-",  "...-", ".--",  "-..-", "-.--", // U-Y
+    "--.."                                  // Z
+};
+
+static const char *word_bank[] = {
+    "SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"
+};
+
+// Config for timing
+static int64_t DOT_US;
+static int64_t DASH_US;
+static int64_t SYMBOL_GAP_US;
+static int64_t LETTER_GAP_US;
+static int64_t END_HOLD_US = 5000000; 
+static int64_t SAMPLE_PERIOD_US = 100; 
+
+// Config for physics (Z axis keys)
+static double BASE_G = -1.0; 
+static double TRANSIT_TIME_US;
+static double STOP_DOWN_US = 100; 
+static double STOP_UP_US = 200;   
+
+static double down_spike_g = 510.0;
+static double up_spike_g = 255.0;
 
 enum key_state {
-    KS_UP = 0,
+    KS_UP_REST = 0,
     KS_TRAVEL_DOWN,
-    KS_DOWN,
+    KS_DOWN_STOP,
+    KS_DOWN_REST,
     KS_TRAVEL_UP,
+    KS_UP_STOP,
+    KS_END // Final wait
 };
 
 struct segment {
@@ -27,265 +53,194 @@ struct segment {
     int64_t end_us;
 };
 
-#define MAX_SEGMENTS 1024
+#define MAX_SEGMENTS 1000
 static struct segment timeline[MAX_SEGMENTS];
-static size_t timeline_count;
+static int num_segments = 0;
 
-static int64_t bw_rate_to_period_us(uint8_t rate_code)
-{
-    switch (rate_code & 0x0F) {
-    case 0x0F: return 313;   /* 3200 Hz */
-    case 0x0E: return 625;   /* 1600 Hz */
-    case 0x0D: return 1250;  /* 800 Hz */
-    case 0x0C: return 2500;  /* 400 Hz */
-    case 0x0B: return 5000;  /* 200 Hz */
-    case 0x0A: return 10000; /* 100 Hz */
-    case 0x09: return 20000; /* 50 Hz */
-    case 0x08: return 40000; /* 25 Hz */
-    default:
-        return 10000;
+static int64_t current_time_us = 0;
+static int64_t current_sample = 0;
+static bool initialized = false;
+
+static void add_segment(enum key_state state, int64_t duration_us) {
+    if (num_segments >= MAX_SEGMENTS) return;
+    int64_t start_us = (num_segments == 0) ? 0 : timeline[num_segments-1].end_us;
+    timeline[num_segments].state = state;
+    timeline[num_segments].end_us = start_us + duration_us;
+    num_segments++;
+}
+
+static void build_timeline() {
+    DOT_US = 100000 + (rand() % 150001);
+    DASH_US = 3 * DOT_US;
+    SYMBOL_GAP_US = DOT_US;
+    LETTER_GAP_US = 3 * DOT_US;
+
+    TRANSIT_TIME_US = 3000 + (rand() % 3001);
+    
+    double transit_sec = TRANSIT_TIME_US / 1000000.0;
+    double avg_vel = 0.002 / transit_sec;
+    
+    double stop_down_sec = STOP_DOWN_US / 1000000.0;
+    down_spike_g = (avg_vel / stop_down_sec) / 9.8;
+    
+    double stop_up_sec = STOP_UP_US / 1000000.0;
+    up_spike_g = (avg_vel / stop_up_sec) / 9.8;
+
+    int index = 0;
+    FILE *f = fopen("/tests/secret_word.txt", "r");
+    if (f) {
+        if (fscanf(f, "%d", &index) != 1) index = 0;
+        fclose(f);
     }
-}
-
-static uint32_t next_rand(void)
-{
-    prng = prng * 1664525u + 1013904223u;
-    return prng;
-}
-
-static const char *morse_for_char(char c)
-{
-    switch ((char)toupper((unsigned char)c)) {
-    case 'A': return ".-";
-    case 'B': return "-...";
-    case 'C': return "-.-.";
-    case 'D': return "-..";
-    case 'E': return ".";
-    case 'F': return "..-.";
-    case 'G': return "--.";
-    case 'H': return "....";
-    case 'I': return "..";
-    case 'J': return ".---";
-    case 'K': return "-.-";
-    case 'L': return ".-..";
-    case 'M': return "--";
-    case 'N': return "-.";
-    case 'O': return "---";
-    case 'P': return ".--.";
-    case 'Q': return "--.-";
-    case 'R': return ".-.";
-    case 'S': return "...";
-    case 'T': return "-";
-    case 'U': return "..-";
-    case 'V': return "...-";
-    case 'W': return ".--";
-    case 'X': return "-..-";
-    case 'Y': return "-.--";
-    case 'Z': return "--..";
-    default: return NULL;
-    }
-}
-
-static void append_segment(enum key_state state, int64_t duration_ms)
-{
-    if (timeline_count >= MAX_SEGMENTS || duration_ms <= 0) {
-        return;
-    }
-
-    int64_t duration_us = duration_ms * 1000;
-    int64_t start = (timeline_count == 0) ? 0 : timeline[timeline_count - 1].end_us;
-    timeline[timeline_count].state = state;
-    timeline[timeline_count].end_us = start + duration_us;
-    timeline_count++;
-}
-
-static void build_timeline_from_word(const char *word)
-{
-    timeline_count = 0;
-
-    /* Initial quiet window for baseline/noise adaptation. */
-    append_segment(KS_UP, 3000);
-
-    size_t len = strlen(word);
-    for (size_t i = 0; i < len; i++) {
-        const char *code = morse_for_char(word[i]);
-        if (code == NULL) {
-            continue;
+    if (index < 0 || index > 7) index = 0;
+    
+    const char *word = word_bank[index];
+    
+    add_segment(KS_UP_REST, 1000000);
+    
+    for (int i = 0; word[i] != '\0'; i++) {
+        int char_idx = word[i] - 'A';
+        if (char_idx < 0 || char_idx > 25) continue;
+        
+        const char *symbols = morse_dict[char_idx];
+        for (int j = 0; symbols[j] != '\0'; j++) {
+            add_segment(KS_TRAVEL_DOWN, TRANSIT_TIME_US);
+            add_segment(KS_DOWN_STOP, STOP_DOWN_US);
+            
+            int64_t hold_time = (symbols[j] == '-') ? DASH_US : DOT_US;
+            add_segment(KS_DOWN_REST, hold_time - TRANSIT_TIME_US - STOP_DOWN_US);
+            
+            add_segment(KS_TRAVEL_UP, TRANSIT_TIME_US);
+            add_segment(KS_UP_STOP, STOP_UP_US);
+            
+            bool is_last_symbol = (symbols[j+1] == '\0');
+            int64_t gap_time = is_last_symbol ? LETTER_GAP_US : SYMBOL_GAP_US;
+            add_segment(KS_UP_REST, gap_time - TRANSIT_TIME_US - STOP_UP_US);
         }
+    }
+    
+    add_segment(KS_END, END_HOLD_US + 1000000);
+}
 
-        size_t n = strlen(code);
-        for (size_t j = 0; j < n; j++) {
-            bool is_dot = (code[j] == '.');
+// Car physics generators
+static double car_vel_ms = 0.0;     // 0 to 20 m/s
+static double car_accel_x = 0.0;    // x accel in g (up to 0.4g accel, -0.9g braking)
+static double car_accel_y = 0.0;    // y accel in g (up to +/- 1.36g)
+static double car_accel_z = 0.0;    // z accel addition in g (hills)
 
-            append_segment(KS_TRAVEL_DOWN, 80);
-            append_segment(KS_DOWN, is_dot ? 120 : 360);
-            append_segment(KS_TRAVEL_UP, 80);
+static int64_t last_car_event_time = 0;
+static int car_state = 0; 
+// 0=steady, 1=accel, 2=brake, 3=turn_left, 4=turn_right, 5=hill_up, 6=hill_down
 
-            if (j + 1 < n) {
-                /* Intra-letter symbol gap. */
-                append_segment(KS_UP, 120);
+static void update_car_physics(int64_t current_time) {
+    // Change car state every 1 to 4 seconds randomly
+    if (current_time - last_car_event_time > (int64_t)(1000000 + (rand() % 3000000))) {
+        car_state = rand() % 7;
+        last_car_event_time = current_time;
+    }
+
+    double dt = SAMPLE_PERIOD_US / 1000000.0;
+    
+    // Reset forces to 0 gradually, or apply them based on state
+    car_accel_y = 0.0;
+    car_accel_z = 0.0;
+
+    switch (car_state) {
+        case 0: // coasting
+            car_accel_x = 0.0;
+            break;
+        case 1: // accelerating linearly (up to 4 m/s^2)
+            car_accel_x = 4.0 / 9.8; 
+            car_vel_ms += 4.0 * dt;
+            if (car_vel_ms > 20.0) {
+                car_vel_ms = 20.0;
+                car_accel_x = 0.0;
             }
-        }
-
-        if (i + 1 < len) {
-            /* Inter-letter gap. */
-            append_segment(KS_UP, 360);
-        }
-    }
-
-    /* Final hold to let decoder flush output and exit cleanly. */
-    append_segment(KS_UP, 5000);
-}
-
-static enum key_state current_state(int64_t now_us)
-{
-    for (size_t i = 0; i < timeline_count; i++) {
-        if (now_us < timeline[i].end_us) {
-            return timeline[i].state;
-        }
-    }
-    return KS_UP;
-}
-
-static void synth_sample(enum key_state st, int16_t *raw_x, int16_t *raw_y, int16_t *raw_z)
-{
-    int16_t noise_x = (int16_t)((next_rand() % 9) - 4);
-    int16_t noise_y = (int16_t)((next_rand() % 9) - 4);
-    int16_t noise_z = (int16_t)((next_rand() % 9) - 4);
-
-    switch (st) {
-    case KS_TRAVEL_DOWN:
-        *raw_x = 220 + noise_x;
-        *raw_y = noise_y;
-        *raw_z = 240 + noise_z;
-        break;
-    case KS_DOWN:
-        *raw_x = 90 + noise_x;
-        *raw_y = noise_y;
-        *raw_z = 250 + noise_z;
-        break;
-    case KS_TRAVEL_UP:
-        *raw_x = -220 + noise_x;
-        *raw_y = noise_y;
-        *raw_z = 240 + noise_z;
-        break;
-    case KS_UP:
-    default:
-        *raw_x = noise_x;
-        *raw_y = noise_y;
-        *raw_z = 250 + noise_z;
-        break;
-    }
-}
-
-static void encode_xyz(uint8_t *buf, int16_t raw_x, int16_t raw_y, int16_t raw_z)
-{
-    buf[0] = (uint8_t)(raw_x & 0xFF);
-    buf[1] = (uint8_t)((raw_x >> 8) & 0xFF);
-    buf[2] = (uint8_t)(raw_y & 0xFF);
-    buf[3] = (uint8_t)((raw_y >> 8) & 0xFF);
-    buf[4] = (uint8_t)(raw_z & 0xFF);
-    buf[5] = (uint8_t)((raw_z >> 8) & 0xFF);
-}
-
-static void fill_data_window(uint8_t *buf, size_t len)
-{
-    int16_t x, y, z;
-    int64_t period_us = bw_rate_to_period_us(reg_file[ADXL345_REG_BW_RATE]);
-
-    for (size_t off = 0; off + 5 < len; off += 6) {
-        enum key_state st = current_state(sample_time_us);
-        synth_sample(st, &x, &y, &z);
-        encode_xyz(&buf[off], x, y, z);
-        sample_time_us += period_us;
-    }
-
-    for (size_t off = (len / 6) * 6; off < len; off++) {
-        buf[off] = 0;
-    }
-}
-
-static int adxl345_emul_transfer_i2c(const struct emul *target,
-                                     struct i2c_msg *msgs,
-                                     int num_msgs,
-                                     int addr)
-{
-    ARG_UNUSED(target);
-    ARG_UNUSED(addr);
-
-    if (num_msgs < 1) {
-        return 0;
-    }
-
-    struct i2c_msg *msg0 = &msgs[0];
-    uint8_t reg = msg0->buf[0];
-
-    if (num_msgs == 1 && (msg0->flags & I2C_MSG_READ) == 0 && msg0->len == 2) {
-        uint8_t val = msg0->buf[1];
-        if (reg < sizeof(reg_file)) {
-            reg_file[reg] = val;
-        }
-        printf("Write 0x%02X -> 0x%02X\n", reg, val);
-    } else if (num_msgs == 2 && (msgs[0].flags & I2C_MSG_READ) == 0 && (msgs[1].flags & I2C_MSG_READ) == I2C_MSG_READ) {
-        struct i2c_msg *msg1 = &msgs[1];
-
-        if (reg == 0x00 && msg1->len == 1) {
-            msg1->buf[0] = 0xE5;
-        } else if (reg == 0x39 && msg1->len == 1) {
-            printf("Read 0x39 (FIFO polled)\n");
-            msg1->buf[0] = 0x8C;
-        } else if (reg == 0x30 && msg1->len == 1) {
-            printf("Read 0x30 (INT_SOURCE cleared)\n");
-            enum key_state st = current_state(sample_time_us);
-            msg1->buf[0] = (st == KS_TRAVEL_DOWN || st == KS_TRAVEL_UP) ? 0x10 : 0x00;
-        } else if (reg == 0x32 && msg1->len > 0) {
-            if (msg1->len != 6) {
-                return -EIO;
+            break;
+        case 2: // braking safely (up to -0.9g)
+            car_accel_x = -0.9;
+            car_vel_ms += (-0.9 * 9.8) * dt;
+            if (car_vel_ms < 0.0) {
+                car_vel_ms = 0.0;
+                car_accel_x = 0.0;
             }
-            fill_data_window(msg1->buf, msg1->len);
-            printf("Read 0x32\n");
-        } else if (msg1->len == 1 && reg < sizeof(reg_file)) {
-            msg1->buf[0] = reg_file[reg];
-        } else {
-            memset(msg1->buf, 0, msg1->len);
+            break;
+        case 3: // turn left (if moving)
+            if (car_vel_ms > 5.0) {
+                // centrifugal force v^2 / r. Min radius 30m
+                car_accel_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            }
+            break;
+        case 4: // turn right
+            if (car_vel_ms > 5.0) {
+                car_accel_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            }
+            break;
+        case 5: // hill up (concave up -> positive Z felt force)
+            if (car_vel_ms > 5.0) {
+                car_accel_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            }
+            break;
+        case 6: // hill down (convex -> negative Z felt force)
+            if (car_vel_ms > 5.0) {
+                car_accel_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            }
+            break;
+    }
+}
+
+static double frand_noise() {
+    return ((double)rand() / (double)RAND_MAX) * 0.06 - 0.03; // +/- 0.03g background noise
+}
+
+bool get_sample_stru(readings_struct_t *readings) {
+    if (!initialized) {
+        srand(42);
+        build_timeline();
+        current_time_us = 0;
+        current_sample = 0;
+        initialized = true;
+    }
+
+    if (num_segments == 0) return false;
+    
+    enum key_state state = KS_END;
+    for (int i = 0; i < num_segments; i++) {
+        if (current_time_us < timeline[i].end_us) {
+            state = timeline[i].state;
+            break;
         }
     }
-
-    return 0;
-}
-
-static const struct i2c_emul_api adxl345_emul_api_i2c = {
-    .transfer = adxl345_emul_transfer_i2c,
-};
-
-static int dummy_device_init(const struct device *dev)
-{
-    ARG_UNUSED(dev);
-    memset(reg_file, 0, sizeof(reg_file));
-    reg_file[ADXL345_REG_BW_RATE] = 0x0A;
-    reg_file[ADXL345_REG_DEVID] = 0xE5;
-    prng = 42;
-    sample_time_us = 0;
-
-    const char *target_word = getenv("MORSE_TARGET_WORD");
-    if (target_word == NULL || target_word[0] == '\0') {
-        target_word = "SOS";
+    
+    if (current_time_us >= timeline[num_segments-1].end_us) {
+        return false;
     }
-    build_timeline_from_word(target_word);
 
-    return 0;
+    update_car_physics(current_time_us);
+
+    double z_g = BASE_G;
+    switch (state) {
+        case KS_TRAVEL_DOWN: z_g = BASE_G; break;
+        case KS_DOWN_STOP: z_g = BASE_G + down_spike_g; break;
+        case KS_DOWN_REST: z_g = BASE_G; break;
+        case KS_TRAVEL_UP: z_g = BASE_G; break;
+        case KS_UP_STOP: z_g = BASE_G - up_spike_g; break;
+        case KS_UP_REST: z_g = BASE_G; break;
+        case KS_END: z_g = BASE_G; break;
+    }
+
+    // Apply baseline car physics to axes
+    readings->x_acc = car_accel_x + frand_noise();
+    readings->y_acc = car_accel_y + frand_noise();
+    
+    // Z axis gets gravity, hill effects, and the actual morse code spikes
+    readings->z_acc = z_g + car_accel_z + frand_noise();
+    
+    readings->sampling_rate_usec = SAMPLE_PERIOD_US;
+    readings->sample_number = current_sample;
+    
+    current_time_us += SAMPLE_PERIOD_US;
+    current_sample++;
+    
+    return true;
 }
-
-DEVICE_DT_DEFINE(DT_NODELABEL(adxl345), dummy_device_init, NULL, NULL, NULL, POST_KERNEL, 99, NULL);
-
-static int adxl345_emul_init(const struct emul *target, const struct device *parent)
-{
-    ARG_UNUSED(target);
-    ARG_UNUSED(parent);
-    return 0;
-}
-
-#define ADXL345_EMUL_DEFINE(inst) \
-    EMUL_DT_DEFINE(DT_NODELABEL(adxl345), adxl345_emul_init, NULL, NULL, &adxl345_emul_api_i2c, NULL)
-
-ADXL345_EMUL_DEFINE(0);
