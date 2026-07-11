@@ -57,24 +57,24 @@ int main(void) {
         double dz = r.z_acc - last_z;
         double dy = r.y_acc - last_y;
         
-        // During car banking and clipping, z_acc can continuously peg at -1.5g. 
-        // We can no longer rely on absolute floors because car cresting a 30m hill pegs to -1.5g too.
-        // But the delta (rate of change) over 100usec is still massive despite clipping hitting limits.
+        // Car banking physics takes seconds to change, so dy/dz naturally sits at ~0.0001 per sample.
+        // However, the finger pushing the key accelerates it rapidly to cross the 2.0mm gap in 3.0ms.
+        // This transit yields a sustained +/- 0.3g (squared > 0.04) delta compared to BASE_G!
         
-        // Positive Z jump -> spike DOWN
-        // Negative Z jump -> spike UP
-        // If clipped, we might jump from -0.5 to +1.5 = delta +2.0
-        // Or if banked, both Y and Z jump simultaneously.
-        // Car physics take seconds to change, so dy/dz without strikes is ~0.0001 per sample.
-        // Therefore, any massive jump > 0.6g instantaneously is 100% a key impact!
+        // Even harder: ADC sampling aliasing can make the subsequent stop spikes (3.0g bounds) randomly DISAPPEAR completely!
+        // We must detect just the initial entry vector into the +/- 0.3g transit phase seamlessly instead of looking for massive jolts.
         
-        bool impact = (dy*dy + dz*dz > 0.36); // Magnitude > 0.6g
-        bool spike_down = impact && (dz > 0); 
-        bool spike_up = impact && (dz < 0);
+        bool impact = (dy*dy + dz*dz > 0.04);
+        
+        // If dz is negative, it's either the start of downward transit, or an upward stop spike.
+        // If dz is positive, it's either the end of downward transit (returning to base), or a downward stop spike.
+        // Either indicates a massive polarity flip that shifts the physical key state boundary.
+        bool spike_down = impact && (dz > 0.1 || (dz < -0.1 && dy*dy+dz*dz > 0.6));
+        bool spike_up = impact && (dz < -0.1 || (dz > 0.1 && dy*dy+dz*dz > 0.6));
         
         // Use a cooldown or state lock to avoid bouncing on recovery
         if (spike_down && !is_down) {
-            // Must have been up for at least 1ms to count as a transition
+            // Minimum 1ms spacing to avoid double triggering on an impact spike occurring right after its own transit start!
             if (last_transition_time == 0 || (current_time - last_transition_time > 1000)) {
                 if (last_transition_time > 0) {
                     pulses[num_pulses].is_mark = false;

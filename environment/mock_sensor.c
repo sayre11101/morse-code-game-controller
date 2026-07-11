@@ -31,11 +31,15 @@ static int64_t SAMPLE_PERIOD_US = 100; // 100 microseconds (10kHz rate)
 static double BASE_G = -1.0; 
 static double TRANSIT_TIME_US;
 // Stop bounds
-static double STOP_DOWN_US = 100; // 0.1ms stop DOWN -> high upward accel spike
-static double STOP_UP_US = 200;   // 0.2ms stop UP -> moderate downward accel spike
+static double STOP_DOWN_US = 50;  // 50usec (50% chance to miss at 100us sample rate)
+static double STOP_UP_US = 80;    // 80usec (20% chance to miss)
 
 static double down_spike_g = 510.0;
 static double up_spike_g = 255.0;
+
+// Transit forces that last 3-6ms, guaranteed to be sampled
+static double travel_down_g = 0.0;
+static double travel_up_g = 0.0;
 
 enum key_state {
     KS_UP_REST = 0,
@@ -85,6 +89,15 @@ static void build_timeline() {
     double transit_sec = TRANSIT_TIME_US / 1000000.0;
     double avg_vel = 0.002 / transit_sec;
     
+    // Constant acceleration needed to reach 0.002m in transit_sec.
+    double travel_a = (2.0 * 0.002) / (transit_sec * transit_sec); // m/s^2
+    travel_down_g = -(travel_a / 9.8); // Pulls downward
+    travel_up_g = (travel_a / 9.8);  // Pushes upward
+    
+    // Simplify to steady average transit G force (+/- 0.3g)
+    travel_down_g = -0.3; 
+    travel_up_g = 0.3;    
+
     // Deceleration = Delta_V / Delta_t / 9.8 m/s/s
     double stop_down_sec = STOP_DOWN_US / 1000000.0;
     down_spike_g = (avg_vel / stop_down_sec) / 9.8;
@@ -174,7 +187,7 @@ bool get_sample_stru(readings_struct_t *readings) {
     
     switch (state) {
         case KS_TRAVEL_DOWN:
-            z_g = BASE_G; // Simple travel, negligible g
+            z_g = BASE_G + travel_down_g;
             break;
         case KS_DOWN_STOP:
             // Massive spike UP (+Z) to stop downward motion
@@ -184,7 +197,7 @@ bool get_sample_stru(readings_struct_t *readings) {
             z_g = BASE_G;
             break;
         case KS_TRAVEL_UP:
-            z_g = BASE_G; 
+            z_g = BASE_G + travel_up_g; 
             break;
         case KS_UP_STOP:
             // Spike DOWN (-Z) to stop upward motion

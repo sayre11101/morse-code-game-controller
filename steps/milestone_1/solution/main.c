@@ -48,15 +48,26 @@ int main(void) {
     } pulses[MAX_PULSES];
     int num_pulses = 0;
 
+    double last_z = -1.0;
+    bool first_sample = true;
+
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
+        if (first_sample) { last_z = r.z_acc; first_sample = false; }
         
-        bool spike_down = (r.z_acc > 100.0);
-        bool spike_up = (r.z_acc < -100.0);
+        double dz = r.z_acc - last_z;
+        last_z = r.z_acc;
+        
+        // Aliased 100us sampling frame means we must isolate the initial transit vector jumps (>= 0.04 magn)
+        bool impact = (dz*dz > 0.02);
+        
+        bool spike_down = impact && (dz > 0.1 || (dz < -0.1 && dz*dz > 0.6));
+        bool spike_up = impact && (dz < -0.1 || (dz > 0.1 && dz*dz > 0.6));
         
         if (spike_down && !is_down) {
-            // Transition UP -> DOWN
-            if (last_transition_time > 0) {
+            // Transition UP -> DOWN (with 1ms debounce)
+            if (last_transition_time == 0 || current_time - last_transition_time > 1000) {
+                if (last_transition_time > 0) {
                 int64_t gap = current_time - last_transition_time;
                 if (num_pulses < MAX_PULSES) {
                     pulses[num_pulses].is_mark = false;
@@ -64,24 +75,27 @@ int main(void) {
                     num_pulses++;
                 }
             }
-            is_down = true;
-            last_transition_time = current_time;
+                is_down = true;
+                last_transition_time = current_time;
+            }
         } 
         else if (spike_up && is_down) {
-            // Transition DOWN -> UP
-            if (last_transition_time > 0) {
+            // Transition DOWN -> UP (with 1ms debounce)
+            if (last_transition_time == 0 || current_time - last_transition_time > 1000) {
+                if (last_transition_time > 0) {
                 int64_t mark = current_time - last_transition_time;
                 if (num_pulses < MAX_PULSES) {
                     pulses[num_pulses].is_mark = true;
                     pulses[num_pulses].duration = mark;
                     num_pulses++;
                 }
-                if (mark < min_mark) {
-                    min_mark = mark;
+                    if (mark < min_mark) {
+                        min_mark = mark;
+                    }
                 }
+                is_down = false;
+                last_transition_time = current_time;
             }
-            is_down = false;
-            last_transition_time = current_time;
         }
         
         // Check for end hold
