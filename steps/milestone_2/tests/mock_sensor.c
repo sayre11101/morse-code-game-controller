@@ -17,15 +17,12 @@ static const char *morse_dict[26] = {
     "--.."                                  // Z
 };
 
-static const char *word_bank[] = {
-    "SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"
-};
-
 // Config for timing
 static int64_t DOT_US;
 static int64_t DASH_US;
 static int64_t SYMBOL_GAP_US;
 static int64_t LETTER_GAP_US;
+static int64_t WORD_GAP_US;
 static int64_t END_HOLD_US = 5000000; 
 static int64_t SAMPLE_PERIOD_US = 100; 
 
@@ -74,6 +71,7 @@ static void build_timeline() {
     DASH_US = 3 * DOT_US;
     SYMBOL_GAP_US = DOT_US;
     LETTER_GAP_US = 3 * DOT_US;
+    WORD_GAP_US = 7 * DOT_US;
 
     TRANSIT_TIME_US = 3000 + (rand() % 3001);
     
@@ -86,19 +84,20 @@ static void build_timeline() {
     double stop_up_sec = STOP_UP_US / 1000000.0;
     up_spike_g = (avg_vel / stop_up_sec) / 9.8;
 
-    int index = 0;
-    FILE *f = fopen("/tests/secret_word.txt", "r");
-    if (f) {
-        if (fscanf(f, "%d", &index) != 1) index = 0;
-        fclose(f);
-    }
-    if (index < 0 || index > 7) index = 0;
-    
-    const char *word = word_bank[index];
+    #ifndef TEST_WORD
+    #define TEST_WORD "SOS POST"
+    #endif
+
+    const char *word = TEST_WORD;
     
     add_segment(KS_UP_REST, 1000000);
     
     for (int i = 0; word[i] != '\0'; i++) {
+        if (word[i] == ' ') {
+            add_segment(KS_UP_REST, WORD_GAP_US - LETTER_GAP_US);
+            continue;
+        }
+
         int char_idx = word[i] - 'A';
         if (char_idx < 0 || char_idx > 25) continue;
         
@@ -142,9 +141,9 @@ static void update_car_physics(int64_t current_time) {
 
     double dt = SAMPLE_PERIOD_US / 1000000.0;
     
-    // Reset forces to 0 gradually, or apply them based on state
-    car_accel_y = 0.0;
-    car_accel_z = 0.0;
+    // Smooth transition variables for forces instead of instant jumps
+    double target_y = 0.0;
+    double target_z = 0.0;
 
     // Gradually return bank angle to zero when not turning
     if (car_state != 3 && car_state != 4) {
@@ -176,14 +175,14 @@ static void update_car_physics(int64_t current_time) {
         case 3: // turn left (if moving)
             if (car_vel_ms > 5.0) {
                 // centrifugal force v^2 / r. Min radius 30m
-                car_accel_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                target_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
                 // gradually bank road up to 15 degrees (-0.26 radians)
                 if (car_bank_angle > -0.26) car_bank_angle -= 0.01;
             }
             break;
         case 4: // turn right
             if (car_vel_ms > 5.0) {
-                car_accel_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                target_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
                 // gradually bank road up to +15 degrees (+0.26 radians)
                 if (car_bank_angle < 0.26) car_bank_angle += 0.01;
             }
@@ -191,15 +190,22 @@ static void update_car_physics(int64_t current_time) {
         case 5: // hill up (concave up -> positive Z felt force)
             // min radius 30 meters = 400/30 = 13.3 m/s^2 (~1.36g max)
             if (car_vel_ms > 5.0) {
-                car_accel_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                target_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
             }
             break;
         case 6: // hill down (convex -> negative Z felt force)
             if (car_vel_ms > 5.0) {
-                car_accel_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                target_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
             }
             break;
     }
+
+    // Smoothly ease actual acceleration towards the targets to prevent vertical derivative magnitude blowups
+    if (car_accel_y < target_y) car_accel_y += 0.05 * dt;
+    if (car_accel_y > target_y) car_accel_y -= 0.05 * dt;
+
+    if (car_accel_z < target_z) car_accel_z += 0.05 * dt;
+    if (car_accel_z > target_z) car_accel_z -= 0.05 * dt;
 }
 
 static double frand_noise() {
@@ -210,7 +216,13 @@ static double frand_noise() {
 
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        srand(time(NULL));
+        int seed_val = time(NULL);
+        FILE *sf = fopen("/tests/seed.txt", "r");
+        if (sf) {
+            if (fscanf(sf, "%d", &seed_val) != 1) seed_val = time(NULL);
+            fclose(sf);
+        }
+        srand(seed_val);
         build_timeline();
         current_time_us = 0;
         current_sample = 0;

@@ -17,16 +17,12 @@ static const char *morse_dict[26] = {
     "--.."                                  // Z
 };
 
-// Words to select from based on secret_word.txt
-static const char *word_bank[] = {
-    "SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"
-};
-
 // Config for timing
 static int64_t DOT_US;
 static int64_t DASH_US;
 static int64_t SYMBOL_GAP_US;
 static int64_t LETTER_GAP_US;
+static int64_t WORD_GAP_US;
 static int64_t END_HOLD_US = 5000000; // 5 seconds hold at end
 static int64_t SAMPLE_PERIOD_US = 100; // 100 microseconds (10kHz rate)
 
@@ -78,6 +74,7 @@ static void build_timeline() {
     DASH_US = 3 * DOT_US;
     SYMBOL_GAP_US = DOT_US;
     LETTER_GAP_US = 3 * DOT_US;
+    WORD_GAP_US = 7 * DOT_US;
 
     // Randomize transit time between 3ms and 6ms
     TRANSIT_TIME_US = 3000 + (rand() % 3001);
@@ -95,20 +92,23 @@ static void build_timeline() {
     double stop_up_sec = STOP_UP_US / 1000000.0;
     up_spike_g = (avg_vel / stop_up_sec) / 9.8;
 
-    int index = 0;
-    FILE *f = fopen("/tests/secret_word.txt", "r");
-    if (f) {
-        if (fscanf(f, "%d", &index) != 1) index = 0;
-        fclose(f);
-    }
-    if (index < 0 || index > 7) index = 0;
-    
-    const char *word = word_bank[index];
+    #ifndef TEST_WORD
+    #define TEST_WORD "SOS"
+    #endif
+
+    const char *word = TEST_WORD;
     
     // Start with key UP rest for 1 sec
     add_segment(KS_UP_REST, 1000000);
     
     for (int i = 0; word[i] != '\0'; i++) {
+        if (word[i] == ' ') {
+            // Space creates a word gap. Since the previous letter already added a LETTER_GAP_US,
+            // we extend it by (WORD_GAP_US - LETTER_GAP_US) to match the total required 7 dots!
+            add_segment(KS_UP_REST, WORD_GAP_US - LETTER_GAP_US);
+            continue;
+        }
+
         int char_idx = word[i] - 'A';
         if (char_idx < 0 || char_idx > 25) continue;
         

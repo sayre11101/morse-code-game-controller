@@ -46,16 +46,16 @@ def test_output_exists(app_output):
 
 
 def test_output_is_text(app_output):
-    """Verify output is strict decoded text (A-Z only) and exactly one user line."""
+    """Verify output is strict decoded text (A-Z and spaces only) and exactly one user line."""
     candidates = _extract_decoded_message_candidates(app_output)
     assert len(candidates) == 1, (
         "FAIL: Expected exactly one decoded-message line and no extra user-facing output. "
         f"Found {len(candidates)} candidate lines: {candidates}"
     )
     msg_line = candidates[0]
-    assert bool(re.fullmatch(r'[A-Za-z]+', msg_line)), (
-        f"FAIL: Output '{msg_line}' contains non-letter characters. "
-        "Expected only alphabetic characters in the decoded message line."
+    assert bool(re.fullmatch(r'[A-Za-z ]+', msg_line)), (
+        f"FAIL: Output '{msg_line}' contains non-letter/non-space characters. "
+        "Expected only alphabetic characters and spaces in the decoded message line."
     )
 
 
@@ -65,33 +65,26 @@ def test_output_length_reasonable(app_output):
     assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
     msg_line = candidates[0]
     msg_len = len(msg_line)
-    assert 3 <= msg_len <= 6, (
-        f"FAIL: Output length {msg_len} is outside expected range (3-6 chars). "
+    assert 13 <= msg_len <= 50, (
+        f"FAIL: Output length {msg_len} is outside expected reasonable bounds format length (13-50 chars). "
         f"Output: '{msg_line}'"
     )
 
 
 def test_decoded_message_matches_expected_word(app_output):
-    """Verify decoded output matches the verifier-selected target word exactly."""
+    """Verify decoded output matches the verifier-selected target phrase exactly."""
     candidates = _extract_decoded_message_candidates(app_output)
     assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
     msg_line = candidates[0]
 
-    word_bank = ["SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"]
-
+    expected = "SOS SEND HELP NOW PLEASE"
     try:
         with open("/tests/secret_word.txt", "r") as f:
-            index_str = f.read().strip()
+            expected = f.read().strip()
     except FileNotFoundError:
-        index_str = "0"
-    
-    index = int(index_str) if index_str.isdigit() else 0
-    if index < 0 or index >= len(word_bank):
-        index = 0
-        
-    expected = word_bank[index]
+        pass
 
-    assert re.fullmatch(r"[A-Z]{3,6}", expected), (
+    assert re.fullmatch(r"[A-Z ]{13,50}", expected), (
         f"FAIL: Verifier expected word is invalid: '{expected}'."
     )
 
