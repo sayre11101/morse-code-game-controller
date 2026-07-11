@@ -19,13 +19,12 @@ WORDS=(
 INDEX=$((RANDOM % 8))
 SELECTED_WORD=${WORDS[$INDEX]}
 echo "$SELECTED_WORD" > /tests/secret_word.txt
-echo $RANDOM > /tests/seed.txt
+echo "42" > /tests/seed.txt
 
 # Compile the files
-cp /tests/mock_sensor.c /app/mock_sensor.c
 cd /app
-# Compile binary to /app/app.out and inject TEST_WORD
-gcc -Wall -Wextra -O0 -g -I. -DTEST_WORD="\"$SELECTED_WORD\"" -o app.out main.c mock_sensor.c -lm
+# Compile binary to /app/app.out and inject TEST_WORD compiling directly against the tests mock
+gcc -Wall -Wextra -O0 -g -I. -DTEST_WORD="\"$SELECTED_WORD\"" -o app.out main.c /tests/mock_sensor.c -lm
 COMPILE_RC=$?
 
 if [ "$COMPILE_RC" -ne 0 ]; then
