@@ -282,15 +282,15 @@ bool get_sample_stru(readings_struct_t *readings) {
     readings->y_acc = banked_y + frand_noise();
     readings->z_acc = banked_z + frand_noise();
     
-    // Apply 3.0g hardware clipping
-    if (readings->x_acc > 3.0) readings->x_acc = 3.0;
-    if (readings->x_acc < -3.0) readings->x_acc = -3.0;
+    // Apply strict 1.5g hardware clipping
+    if (readings->x_acc > 1.5) readings->x_acc = 1.5;
+    if (readings->x_acc < -1.5) readings->x_acc = -1.5;
     
-    if (readings->y_acc > 3.0) readings->y_acc = 3.0;
-    if (readings->y_acc < -3.0) readings->y_acc = -3.0;
+    if (readings->y_acc > 1.5) readings->y_acc = 1.5;
+    if (readings->y_acc < -1.5) readings->y_acc = -1.5;
     
-    if (readings->z_acc > 3.0) readings->z_acc = 3.0;
-    if (readings->z_acc < -3.0) readings->z_acc = -3.0;
+    if (readings->z_acc > 1.5) readings->z_acc = 1.5;
+    if (readings->z_acc < -1.5) readings->z_acc = -1.5;
 
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;

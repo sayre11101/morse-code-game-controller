@@ -66,11 +66,20 @@ int main(void) {
         
         bool impact = (dy*dy + dz*dz > 0.04);
         
+        // M2 1.5g rigorous clipping: if the chassis is already vibrating near 1.3g, a 0.3g push 
+        // clips the sensor and the delta visually zeroes out. We catch flatlines!
+        bool clipped_top = (r.z_acc > 1.49 || r.y_acc > 1.49) && !is_down;
+        bool clipped_bottom = (r.z_acc < -1.49 || r.y_acc < -1.49) && is_down;
+        if (clipped_top || clipped_bottom) {
+            impact = true;
+            // Prevent spamming the terminal by only announcing when we actually transition!
+        }
+
         // If dz is negative, it's either the start of downward transit, or an upward stop spike.
         // If dz is positive, it's either the end of downward transit (returning to base), or a downward stop spike.
         // Either indicates a massive polarity flip that shifts the physical key state boundary.
-        bool spike_down = impact && (dz > 0.1 || (dz < -0.1 && dy*dy+dz*dz > 0.6));
-        bool spike_up = impact && (dz < -0.1 || (dz > 0.1 && dy*dy+dz*dz > 0.6));
+        bool spike_down = impact && ((dz > 0.1 || clipped_top) || (dz < -0.1 && dy*dy+dz*dz > 0.6));
+        bool spike_up = impact && ((dz < -0.1 || clipped_bottom) || (dz > 0.1 && dy*dy+dz*dz > 0.6));
         
         // Use a cooldown or state lock to avoid bouncing on recovery
         if (spike_down && !is_down) {
@@ -83,6 +92,7 @@ int main(void) {
                 }
                 is_down = true;
                 last_transition_time = current_time;
+                if (clipped_top) printf("[FLATLINE] Sensor violently clipped forcing DOWN!\n");
             }
         } 
         else if (spike_up && is_down) {
@@ -97,6 +107,7 @@ int main(void) {
                 }
                 is_down = false;
                 last_transition_time = current_time;
+                if (clipped_bottom) printf("[FLATLINE] Sensor violently clipped forcing UP!\n");
             }
         }
         
