@@ -76,11 +76,22 @@ static void build_timeline() {
     LETTER_GAP_US = 3 * DOT_US;
     WORD_GAP_US = 7 * DOT_US;
 
-    #ifndef TEST_WORD
-    #define TEST_WORD "SOS"
+    static const char *WORDS[] = {
+      "SOS SEND HELP NOW PLEASE",
+      "RADIO WAVES ARE COOL",
+      "MORSE CODE IS VERY OLD",
+      "PHYSICS AND SOFTWARE",
+      "ACCELEROMETER READS G",
+      "SOLVE THE PUZZLE FAST",
+      "THE CAR IS DRIVING NOW",
+      "WAVES TRAVEL FAST FAR"
+    };
+
+    #ifndef TEST_WORD_INDEX
+    #define TEST_WORD_INDEX 0
     #endif
 
-    const char *word = TEST_WORD;
+    const char *word = WORDS[TEST_WORD_INDEX];
     
     // Start with key UP rest for 1 sec
     add_segment(KS_UP_REST, 1000000, 0, 0);

@@ -23,8 +23,8 @@ echo "42" > /tests/seed.txt
 
 # Compile the files
 cd /app
-# Compile binary to /app/app.out and inject TEST_WORD compiling directly against the tests mock
-gcc -Wall -Wextra -O0 -g -I. -DTEST_WORD="\"$SELECTED_WORD\"" -o app.out main.c /tests/mock_sensor.c -lm
+# Compile binary to /app/app.out and inject TEST_WORD_INDEX compiling directly against the tests mock
+gcc -Wall -Wextra -O0 -g -I/app -DTEST_WORD_INDEX=$INDEX -o /app/app.out /app/main.c /tests/mock_sensor.c -lm
 COMPILE_RC=$?
 
 if [ "$COMPILE_RC" -ne 0 ]; then
