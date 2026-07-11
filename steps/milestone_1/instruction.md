@@ -11,4 +11,4 @@ You will call the mock sensor API to get readings from mock accelerometer. This 
 
 Note that in the data sheet morse-code-sheet.pdf the times are in units of the time of the dot. The speed of the Morse Code keying in the test will set that unit time between 100 and 250 msec. This time will not vary over the message. It will be set at the beginning and will be consistent throughout the message. The travel time of the key will still be in the range of 3-6 msec irrespective of the speed of transmission.
 
-The message is comprised of upper case ASCII characters and spaces only with a maximum length of 50 characters. It will end when the key remains in the UP position (the mock operator is not pressing on the key) for a duration of 5 seconds. At that point you should output the decoded message followed by a '\n' to stdout.
+The message is comprised of upper case ASCII characters and spaces only with a maximum length of 50 characters. It will end when the key remains in the UP position (the mock operator is not pressing on the key) for a duration of 5 seconds. At that point you should output only the decoded message followed by a '\n' to stdout.

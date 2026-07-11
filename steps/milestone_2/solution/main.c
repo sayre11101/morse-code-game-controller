@@ -92,7 +92,7 @@ int main(void) {
                 }
                 is_down = true;
                 last_transition_time = current_time;
-                if (clipped_top) printf("[FLATLINE] Sensor violently clipped forcing DOWN!\n");
+                //if (clipped_top) printf("[FLATLINE] Sensor violently clipped forcing DOWN!\n");
             }
         } 
         else if (spike_up && is_down) {
@@ -107,7 +107,7 @@ int main(void) {
                 }
                 is_down = false;
                 last_transition_time = current_time;
-                if (clipped_bottom) printf("[FLATLINE] Sensor violently clipped forcing UP!\n");
+                //if (clipped_bottom) printf("[FLATLINE] Sensor violently clipped forcing UP!\n");
             }
         }
         

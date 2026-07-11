@@ -6,4 +6,4 @@ This milestone builds on the last milestone by locating the Morse Code Key and o
 
 One major difference between M2 and M1 is that the accelerometer has a maximum absolute value of 1.5g. Any values below -1.5g are clipped to -1.5g. Any values higher than +1.5g are clipped to 1.5g. The timing and all other parameters for unit "dot" timing and the travel times for the key are the same as in milestone 1.
 
-This milestone evaluates message decoding accuracy. After the key rests in the UP position for 5 seconds, print the decoded message to stdout terminate with '\n' The produced text must match the expected message exactly.
+This milestone evaluates message decoding accuracy. After the key rests in the UP position for 5 seconds, print the decoded message to stdout terminated with '\n' and print nothing else. The messages have the same length and character restrictions as in milestone 1. The produced text must match the expected message exactly.

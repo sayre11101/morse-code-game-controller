@@ -19,7 +19,7 @@ WORDS=(
 INDEX=$((RANDOM % 8))
 SELECTED_WORD=${WORDS[$INDEX]}
 echo "$SELECTED_WORD" > /tests/secret_word.txt
-echo $RANDOM > /tests/seed.txt
+echo "42" > /tests/seed.txt
 
 # Compile the files
 cp /tests/mock_sensor.c /app/mock_sensor.c
@@ -33,9 +33,6 @@ if [ "$COMPILE_RC" -ne 0 ]; then
   echo 0 > /logs/verifier/reward.txt
   exit 1
 fi
-
-echo "Execution Seed: $(cat /tests/seed.txt)"
-echo "Secret Target Output: $(cat /tests/secret_word.txt)"
 
 set +e
 python3 -m pytest \

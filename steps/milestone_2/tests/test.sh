@@ -34,9 +34,6 @@ if [ "$COMPILE_RC" -ne 0 ]; then
   exit 1
 fi
 
-echo "Execution Seed: $(cat /tests/seed.txt)"
-echo "Secret Target Output: $(cat /tests/secret_word.txt)"
-
 set +e
 python3 -m pytest \
     -o cache_dir=/tmp/pytest_cache \
