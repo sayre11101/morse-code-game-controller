@@ -28,16 +28,8 @@ static int64_t SAMPLE_PERIOD_US = 100;
 
 // Config for physics (Z axis keys)
 static double BASE_G = -1.0; 
-static double TRANSIT_TIME_US;
 static double STOP_DOWN_US = 50;  // 50usec (50% chance to miss at 100us sample rate)
 static double STOP_UP_US = 80;    // 80usec (20% chance to miss)
-
-static double down_spike_g = 510.0;
-static double up_spike_g = 255.0;
-
-// Transit forces that last 3-6ms, so they are guaranteed to be sampled!
-static double travel_down_g = 0.0; // Will be set dynamically
-static double travel_up_g = 0.0;
 
 enum key_state {
     KS_UP_REST = 0,
@@ -52,6 +44,8 @@ enum key_state {
 struct segment {
     enum key_state state;
     int64_t end_us;
+    double travel_g;
+    double spike_g;
 };
 
 #define MAX_SEGMENTS 1000
@@ -62,11 +56,13 @@ static int64_t current_time_us = 0;
 static int64_t current_sample = 0;
 static bool initialized = false;
 
-static void add_segment(enum key_state state, int64_t duration_us) {
+static void add_segment(enum key_state state, int64_t duration_us, double t_g, double s_g) {
     if (num_segments >= MAX_SEGMENTS) return;
     int64_t start_us = (num_segments == 0) ? 0 : timeline[num_segments-1].end_us;
     timeline[num_segments].state = state;
     timeline[num_segments].end_us = start_us + duration_us;
+    timeline[num_segments].travel_g = t_g;
+    timeline[num_segments].spike_g = s_g;
     num_segments++;
 }
 
@@ -77,38 +73,17 @@ static void build_timeline() {
     LETTER_GAP_US = 3 * DOT_US;
     WORD_GAP_US = 7 * DOT_US;
 
-    TRANSIT_TIME_US = 3000 + (rand() % 3001);
-    
-    double transit_sec = TRANSIT_TIME_US / 1000000.0;
-    double avg_vel = 0.002 / transit_sec;
-    
-    // Constant acceleration needed to reach 0.002m in transit_sec. d = 1/2 * a * t^2
-    double travel_a = (2.0 * 0.002) / (transit_sec * transit_sec); // m/s^2
-    travel_down_g = -(travel_a / 9.8); // Pulls downward
-    travel_up_g = (travel_a / 9.8);  // Pushes upward
-    
-    // Since it's a triangle velocity profile (accel then decel), let's simplify and make 
-    // the transit hold a steady average G force. Max velocity is double avg_vel.
-    travel_down_g = -0.3; // Approx 0.3g constant push down
-    travel_up_g = 0.3;    // Approx 0.3g constant push up
-
-    double stop_down_sec = STOP_DOWN_US / 1000000.0;
-    down_spike_g = (avg_vel / stop_down_sec) / 9.8;
-    
-    double stop_up_sec = STOP_UP_US / 1000000.0;
-    up_spike_g = (avg_vel / stop_up_sec) / 9.8;
-
     #ifndef TEST_WORD
     #define TEST_WORD "SOS POST"
     #endif
 
     const char *word = TEST_WORD;
     
-    add_segment(KS_UP_REST, 1000000);
+    add_segment(KS_UP_REST, 1000000, 0, 0);
     
     for (int i = 0; word[i] != '\0'; i++) {
         if (word[i] == ' ') {
-            add_segment(KS_UP_REST, WORD_GAP_US - LETTER_GAP_US);
+            add_segment(KS_UP_REST, WORD_GAP_US - LETTER_GAP_US, 0, 0);
             continue;
         }
 
@@ -117,22 +92,40 @@ static void build_timeline() {
         
         const char *symbols = morse_dict[char_idx];
         for (int j = 0; symbols[j] != '\0'; j++) {
-            add_segment(KS_TRAVEL_DOWN, TRANSIT_TIME_US);
-            add_segment(KS_DOWN_STOP, STOP_DOWN_US);
+            int64_t transit_down_us = 3000 + (rand() % 3001);
+            int64_t transit_up_us = 4000 + (rand() % 1001);
+
+            double td_sec = transit_down_us / 1000000.0;
+            double tu_sec = transit_up_us / 1000000.0;
+            
+            // Simplify lateral transit force to an observable roughly constant push force (+/- 0.3g)
+            double travel_down_g = -0.3;
+            double travel_up_g = 0.3;
+            
+            double sd_sec = STOP_DOWN_US / 1000000.0;
+            double su_sec = STOP_UP_US / 1000000.0;
+            double avg_d_v = 0.002 / td_sec;
+            double avg_u_v = 0.002 / tu_sec;
+            
+            double down_s_g = (avg_d_v / sd_sec) / 9.8;
+            double up_s_g = (avg_u_v / su_sec) / 9.8;
+
+            add_segment(KS_TRAVEL_DOWN, transit_down_us, travel_down_g, 0);
+            add_segment(KS_DOWN_STOP, STOP_DOWN_US, 0, down_s_g);
             
             int64_t hold_time = (symbols[j] == '-') ? DASH_US : DOT_US;
-            add_segment(KS_DOWN_REST, hold_time - TRANSIT_TIME_US - STOP_DOWN_US);
+            add_segment(KS_DOWN_REST, hold_time - transit_down_us - STOP_DOWN_US, 0, 0);
             
-            add_segment(KS_TRAVEL_UP, TRANSIT_TIME_US);
-            add_segment(KS_UP_STOP, STOP_UP_US);
+            add_segment(KS_TRAVEL_UP, transit_up_us, travel_up_g, 0);
+            add_segment(KS_UP_STOP, STOP_UP_US, 0, up_s_g);
             
             bool is_last_symbol = (symbols[j+1] == '\0');
             int64_t gap_time = is_last_symbol ? LETTER_GAP_US : SYMBOL_GAP_US;
-            add_segment(KS_UP_REST, gap_time - TRANSIT_TIME_US - STOP_UP_US);
+            add_segment(KS_UP_REST, gap_time - transit_up_us - STOP_UP_US, 0, 0);
         }
     }
     
-    add_segment(KS_END, END_HOLD_US + 1000000);
+    add_segment(KS_END, END_HOLD_US + 1000000, 0, 0);
 }
 
 // Car physics generators
@@ -246,9 +239,13 @@ bool get_sample_stru(readings_struct_t *readings) {
     if (num_segments == 0) return false;
     
     enum key_state state = KS_END;
+    double t_g = 0;
+    double s_g = 0;
     for (int i = 0; i < num_segments; i++) {
         if (current_time_us < timeline[i].end_us) {
             state = timeline[i].state;
+            t_g = timeline[i].travel_g;
+            s_g = timeline[i].spike_g;
             break;
         }
     }
@@ -261,11 +258,11 @@ bool get_sample_stru(readings_struct_t *readings) {
 
     double z_g = BASE_G;
     switch (state) {
-        case KS_TRAVEL_DOWN: z_g = BASE_G + travel_down_g; break;
-        case KS_DOWN_STOP: z_g = BASE_G + down_spike_g; break;
+        case KS_TRAVEL_DOWN: z_g = BASE_G + t_g; break;
+        case KS_DOWN_STOP: z_g = BASE_G + s_g; break;
         case KS_DOWN_REST: z_g = BASE_G; break;
-        case KS_TRAVEL_UP: z_g = BASE_G + travel_up_g; break;
-        case KS_UP_STOP: z_g = BASE_G - up_spike_g; break;
+        case KS_TRAVEL_UP: z_g = BASE_G + t_g; break;
+        case KS_UP_STOP: z_g = BASE_G - s_g; break;
         case KS_UP_REST: z_g = BASE_G; break;
         case KS_END: z_g = BASE_G; break;
     }
