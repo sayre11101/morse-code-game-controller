@@ -17,6 +17,7 @@ static const char *morse_dict[26] = {
     "--.."                                  // Z
 };
 
+// Words to select from based on secret_word.txt
 static const char *word_bank[] = {
     "SOS", "RADIO", "WAVE", "MORSE", "CODE", "PULSE", "SIGNAL", "LIGHT"
 };
@@ -26,14 +27,16 @@ static int64_t DOT_US;
 static int64_t DASH_US;
 static int64_t SYMBOL_GAP_US;
 static int64_t LETTER_GAP_US;
-static int64_t END_HOLD_US = 5000000; 
-static int64_t SAMPLE_PERIOD_US = 100; 
+static int64_t END_HOLD_US = 5000000; // 5 seconds hold at end
+static int64_t SAMPLE_PERIOD_US = 100; // 100 microseconds (10kHz rate)
 
-// Config for physics (Z axis keys)
+// Config for physics (Z axis)
+// Gravity is downward (negative Z). Up is positive Z.
 static double BASE_G = -1.0; 
 static double TRANSIT_TIME_US;
-static double STOP_DOWN_US = 100; 
-static double STOP_UP_US = 200;   
+// Stop bounds
+static double STOP_DOWN_US = 100; // 0.1ms stop DOWN -> high upward accel spike
+static double STOP_UP_US = 200;   // 0.2ms stop UP -> moderate downward accel spike
 
 static double down_spike_g = 510.0;
 static double up_spike_g = 255.0;
@@ -70,16 +73,22 @@ static void add_segment(enum key_state state, int64_t duration_us) {
 }
 
 static void build_timeline() {
+    // Randomize unit dot time between 100ms and 250ms
     DOT_US = 100000 + (rand() % 150001);
     DASH_US = 3 * DOT_US;
     SYMBOL_GAP_US = DOT_US;
     LETTER_GAP_US = 3 * DOT_US;
 
+    // Randomize transit time between 3ms and 6ms
     TRANSIT_TIME_US = 3000 + (rand() % 3001);
     
+    // Physics derivations:
+    // Gap = 2.0mm = 0.002m
+    // Average velocity = 0.002m / (TRANSIT_TIME_US / 1000000.0s)
     double transit_sec = TRANSIT_TIME_US / 1000000.0;
     double avg_vel = 0.002 / transit_sec;
     
+    // Deceleration = Delta_V / Delta_t / 9.8 m/s/s
     double stop_down_sec = STOP_DOWN_US / 1000000.0;
     down_spike_g = (avg_vel / stop_down_sec) / 9.8;
     
@@ -96,6 +105,7 @@ static void build_timeline() {
     
     const char *word = word_bank[index];
     
+    // Start with key UP rest for 1 sec
     add_segment(KS_UP_REST, 1000000);
     
     for (int i = 0; word[i] != '\0'; i++) {
@@ -104,111 +114,40 @@ static void build_timeline() {
         
         const char *symbols = morse_dict[char_idx];
         for (int j = 0; symbols[j] != '\0'; j++) {
+            // Press key down
             add_segment(KS_TRAVEL_DOWN, TRANSIT_TIME_US);
             add_segment(KS_DOWN_STOP, STOP_DOWN_US);
             
+            // Hold down
             int64_t hold_time = (symbols[j] == '-') ? DASH_US : DOT_US;
+            // Subtract transit+stop time from the hold to maintain dot alignment
             add_segment(KS_DOWN_REST, hold_time - TRANSIT_TIME_US - STOP_DOWN_US);
             
+            // Release key up
             add_segment(KS_TRAVEL_UP, TRANSIT_TIME_US);
             add_segment(KS_UP_STOP, STOP_UP_US);
             
+            // Gap between symbols or letters
             bool is_last_symbol = (symbols[j+1] == '\0');
             int64_t gap_time = is_last_symbol ? LETTER_GAP_US : SYMBOL_GAP_US;
             add_segment(KS_UP_REST, gap_time - TRANSIT_TIME_US - STOP_UP_US);
         }
     }
     
+    // Final end hold in UP position for 5 seconds
     add_segment(KS_END, END_HOLD_US + 1000000);
 }
 
-// Car physics generators
-static double car_vel_ms = 0.0;     // 0 to 20 m/s
-static double car_accel_x = 0.0;    // x accel in g
-static double car_accel_y = 0.0;    // y accel in g
-static double car_accel_z = 0.0;    // base z accel in g (gravity + hills)
-static double car_bank_angle = 0.0; // road bank angle in radians
-
-static int64_t last_car_event_time = 0;
-static int car_state = 0; 
-// 0=steady, 1=accel, 2=brake, 3=turn_left, 4=turn_right, 5=hill_up, 6=hill_down
-
-static void update_car_physics(int64_t current_time) {
-    // Change car state every 1 to 4 seconds randomly
-    if (current_time - last_car_event_time > (int64_t)(1000000 + (rand() % 3000000))) {
-        car_state = rand() % 7;
-        last_car_event_time = current_time;
-    }
-
-    double dt = SAMPLE_PERIOD_US / 1000000.0;
-    
-    // Reset forces to 0 gradually, or apply them based on state
-    car_accel_y = 0.0;
-    car_accel_z = 0.0;
-
-    // Gradually return bank angle to zero when not turning
-    if (car_state != 3 && car_state != 4) {
-        if (car_bank_angle > 0.01) car_bank_angle -= 0.01;
-        else if (car_bank_angle < -0.01) car_bank_angle += 0.01;
-        else car_bank_angle = 0.0;
-    }
-
-    switch (car_state) {
-        case 0: // coasting
-            car_accel_x = 0.0;
-            break;
-        case 1: // accelerating linearly (up to 4 m/s^2)
-            car_accel_x = 4.0 / 9.8; 
-            car_vel_ms += 4.0 * dt;
-            if (car_vel_ms > 20.0) {
-                car_vel_ms = 20.0;
-                car_accel_x = 0.0;
-            }
-            break;
-        case 2: // braking safely (up to -0.9g)
-            car_accel_x = -0.9;
-            car_vel_ms += (-0.9 * 9.8) * dt;
-            if (car_vel_ms < 0.0) {
-                car_vel_ms = 0.0;
-                car_accel_x = 0.0;
-            }
-            break;
-        case 3: // turn left (if moving)
-            if (car_vel_ms > 5.0) {
-                // centrifugal force v^2 / r. Min radius 30m
-                car_accel_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
-                // gradually bank road up to 15 degrees (-0.26 radians)
-                if (car_bank_angle > -0.26) car_bank_angle -= 0.01;
-            }
-            break;
-        case 4: // turn right
-            if (car_vel_ms > 5.0) {
-                car_accel_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
-                // gradually bank road up to +15 degrees (+0.26 radians)
-                if (car_bank_angle < 0.26) car_bank_angle += 0.01;
-            }
-            break;
-        case 5: // hill up (concave up -> positive Z felt force)
-            // min radius 30 meters = 400/30 = 13.3 m/s^2 (~1.36g max)
-            if (car_vel_ms > 5.0) {
-                car_accel_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
-            }
-            break;
-        case 6: // hill down (convex -> negative Z felt force)
-            if (car_vel_ms > 5.0) {
-                car_accel_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
-            }
-            break;
-    }
-}
-
 static double frand_noise() {
-    return ((double)rand() / (double)RAND_MAX) * 0.06 - 0.03; // +/- 0.03g background noise
+    return ((double)rand() / (double)RAND_MAX) * 0.04 - 0.02; // +/- 0.02g noise
 }
+
+#include <time.h>
 
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        srand(42);
+        // Seed randomness dynamically to ensure different physics curves and dot timings per test
+        srand(time(NULL));
         build_timeline();
         current_time_us = 0;
         current_sample = 0;
@@ -217,6 +156,7 @@ bool get_sample_stru(readings_struct_t *readings) {
 
     if (num_segments == 0) return false;
     
+    // Find current state segment
     enum key_state state = KS_END;
     for (int i = 0; i < num_segments; i++) {
         if (current_time_us < timeline[i].end_us) {
@@ -226,47 +166,39 @@ bool get_sample_stru(readings_struct_t *readings) {
     }
     
     if (current_time_us >= timeline[num_segments-1].end_us) {
+        // Timeline over
         return false;
     }
 
-    update_car_physics(current_time_us);
-
     double z_g = BASE_G;
+    
     switch (state) {
-        case KS_TRAVEL_DOWN: z_g = BASE_G; break;
-        case KS_DOWN_STOP: z_g = BASE_G + down_spike_g; break;
-        case KS_DOWN_REST: z_g = BASE_G; break;
-        case KS_TRAVEL_UP: z_g = BASE_G; break;
-        case KS_UP_STOP: z_g = BASE_G - up_spike_g; break;
-        case KS_UP_REST: z_g = BASE_G; break;
-        case KS_END: z_g = BASE_G; break;
+        case KS_TRAVEL_DOWN:
+            z_g = BASE_G; // Simple travel, negligible g
+            break;
+        case KS_DOWN_STOP:
+            // Massive spike UP (+Z) to stop downward motion
+            z_g = BASE_G + down_spike_g;
+            break;
+        case KS_DOWN_REST:
+            z_g = BASE_G;
+            break;
+        case KS_TRAVEL_UP:
+            z_g = BASE_G; 
+            break;
+        case KS_UP_STOP:
+            // Spike DOWN (-Z) to stop upward motion
+            z_g = BASE_G - up_spike_g;
+            break;
+        case KS_UP_REST:
+        case KS_END:
+            z_g = BASE_G;
+            break;
     }
 
-    // Key impact force occurs along the physical z-axis of the key structure
-    double total_unbanked_z = z_g + car_accel_z;
-    double total_unbanked_y = car_accel_y;
-    
-    // Apply banking to the car/key chassis
-    // Y' = Y*cos(theta) - Z*sin(theta)
-    // Z' = Y*sin(theta) + Z*cos(theta)
-    double banked_y = total_unbanked_y * cos(car_bank_angle) - total_unbanked_z * sin(car_bank_angle);
-    double banked_z = total_unbanked_y * sin(car_bank_angle) + total_unbanked_z * cos(car_bank_angle);
-
-    // Apply baseline car physics to axes with noise
-    readings->x_acc = car_accel_x + frand_noise();
-    readings->y_acc = banked_y + frand_noise();
-    readings->z_acc = banked_z + frand_noise();
-    
-    // Apply 3.0g hardware clipping
-    if (readings->x_acc > 3.0) readings->x_acc = 3.0;
-    if (readings->x_acc < -3.0) readings->x_acc = -3.0;
-    
-    if (readings->y_acc > 3.0) readings->y_acc = 3.0;
-    if (readings->y_acc < -3.0) readings->y_acc = -3.0;
-    
-    if (readings->z_acc > 3.0) readings->z_acc = 3.0;
-    if (readings->z_acc < -3.0) readings->z_acc = -3.0;
-
+    readings->x_acc = frand_noise();
+    readings->y_acc = frand_noise();
+    readings->z_acc = z_g + frand_noise();
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;
     

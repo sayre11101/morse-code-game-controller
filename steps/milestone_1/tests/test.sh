@@ -5,6 +5,7 @@ mkdir -p /logs/verifier
 
 # Generate a random word index and write to verifier-only file
 echo $((RANDOM % 8)) > /tests/secret_word.txt
+echo $RANDOM > /tests/seed.txt
 
 # Compile the files
 cp /tests/mock_sensor.c /app/mock_sensor.c

@@ -23,9 +23,10 @@ set +e
 python3 -m pytest \
     -o cache_dir=/tmp/pytest_cache \
     --ctrf /logs/verifier/ctrf.json \
-    /tests/test_m2.py -rA
+    /tests/test_m1.py -rA
 PYTEST_RC=$?
 
+# Restore baseline starter main.c to avoid carrying milestone solution forward.
 if [ -f /tests/main.c.baseline ]; then
   if ! cp /tests/main.c.baseline /app/main.c; then
     echo "ERROR: Failed to restore baseline main.c for next milestone"

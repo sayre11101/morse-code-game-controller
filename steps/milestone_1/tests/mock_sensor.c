@@ -142,9 +142,12 @@ static double frand_noise() {
     return ((double)rand() / (double)RAND_MAX) * 0.04 - 0.02; // +/- 0.02g noise
 }
 
+#include <time.h>
+
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        srand(42);
+        // Seed randomness dynamically to ensure different physics curves and dot timings per test
+        srand(time(NULL));
         build_timeline();
         current_time_us = 0;
         current_sample = 0;

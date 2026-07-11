@@ -206,9 +206,11 @@ static double frand_noise() {
     return ((double)rand() / (double)RAND_MAX) * 0.06 - 0.03; // +/- 0.03g background noise
 }
 
+#include <time.h>
+
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        srand(42);
+        srand(time(NULL));
         build_timeline();
         current_time_us = 0;
         current_sample = 0;
