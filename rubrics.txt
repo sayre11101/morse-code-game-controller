@@ -1,25 +1,17 @@
 # Rubric 1
-Agent performs I2C register reads from DATAX0 to sample key acceleration,  +2
-Agent applies threshold-based acceleration classification to detect downward motion (≥ 120 raw units),  +3
-Agent transitions through all four key states in strict sequence (TRAVEL_DOWN → DOWN → TRAVEL_UP → UP),  +3
-Agent computes and outputs measured duration in seconds for each state change,  +2
-Agent counts and validates completion of two or more full press/release cycles,  +2
-Agent monitors final UP state continuously for ≥ 5 seconds before proceeding,  +3
-Agent outputs END marker to signal successful key session termination,  +1
-Agent hardcodes state outputs without reading or processing sensor data,  -5
-Agent skips or reorders required state transitions in the output sequence,  -3
-Agent fails to reach sustained UP hold or omits END marker,  -5
-Agent outputs infinite state transitions without termination logic or END marker,  -3
-Agent reports TRAVEL durations outside the range 2-20ms or DOWN/UP hold durations outside expected windows,  -2
+Agent produces output from the executable,  +1
+Agent filters debug output entirely and provides one user-facing line of strict alphabetic text,  +2
+Agent dynamically parses bounds to output a decoded message of reasonable bounds (3-6 characters long),  +2
+Agent successfully decodes the message matching the randomly selected target word exactly,  +5
+Agent outputs completely corrupted or unrelated output that is not alphabetic text,  -2
+Agent produces output with extra user-facing lines beyond the single decoded message line,  -3
+Agent fails to wait for the 5-second termination rest state resulting in no output,  -5
 
 # Rubric 2
-Agent decodes Morse symbols by applying timing thresholds to distinguish dots (dits) from dashes (dahs),  +3
-Agent maps decoded Morse symbols to their corresponding alphabetic characters,  +3
-Agent outputs exactly one decoded-message line with letters only (no digits, no extra user-facing output),  +2
-Agent produces output that matches the expected target word exactly,  +3
-Agent produces decodable output that yields recognizable text,  +2
-Agent produces output with extra user-facing lines beyond the decoded message,  -3
-Agent fails to decode any symbols, producing blank or unrelated output,  -
-Agent outputs corrupted character sequence with missing or extra letters,  -3
-Agent outputs non-alphabetic characters or completely misidentifies Morse symbols,  -2
-
+Agent overcomes 1.5g structural hardware clipping and car physics noise to produce output,  +1
+Agent filters debug output entirely and provides one user-facing line of strict alphabetic text under car noise,  +2
+Agent dynamically parses bounds through noise to output a decoded message of reasonable bounds (3-6 characters long),  +2
+Agent successfully decodes the message matching the randomly selected target word exactly despite car physics noise,  +5
+Agent confusingly interprets slow car hills as immediate Morse key impact sequences resulting in corrupted characters,  -2
+Agent loops infinitely or fails to hit proper termination limits inside the car noise and outputs nothing,  -5
+Agent generates output containing extra non-alphabetic debug lines in the final result,  -3

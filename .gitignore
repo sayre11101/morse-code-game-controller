@@ -9,6 +9,8 @@ bak/
 *.out
 *.a
 keys.env
+logs/**
+logs/
 
 # Python & Pytest Caches
 __pycache__/

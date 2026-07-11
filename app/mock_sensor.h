@@ -1,5 +1,5 @@
-#ifndef ADXL_REGS_H
-#define ADXL_REGS_H
+#ifndef MOCK_SENSOR_H
+#define MOCK_SENSOR_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -23,4 +23,4 @@ typedef struct {
  */
 bool get_sample_stru(readings_struct_t *readings);
 
-#endif /* ADXL_REGS_H */
+#endif /* MOCK_SENSOR_H */

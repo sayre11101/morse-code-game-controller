@@ -124,9 +124,10 @@ static void build_timeline() {
 
 // Car physics generators
 static double car_vel_ms = 0.0;     // 0 to 20 m/s
-static double car_accel_x = 0.0;    // x accel in g (up to 0.4g accel, -0.9g braking)
-static double car_accel_y = 0.0;    // y accel in g (up to +/- 1.36g)
-static double car_accel_z = 0.0;    // z accel addition in g (hills)
+static double car_accel_x = 0.0;    // x accel in g
+static double car_accel_y = 0.0;    // y accel in g
+static double car_accel_z = 0.0;    // base z accel in g (gravity + hills)
+static double car_bank_angle = 0.0; // road bank angle in radians
 
 static int64_t last_car_event_time = 0;
 static int car_state = 0; 
@@ -144,6 +145,13 @@ static void update_car_physics(int64_t current_time) {
     // Reset forces to 0 gradually, or apply them based on state
     car_accel_y = 0.0;
     car_accel_z = 0.0;
+
+    // Gradually return bank angle to zero when not turning
+    if (car_state != 3 && car_state != 4) {
+        if (car_bank_angle > 0.01) car_bank_angle -= 0.01;
+        else if (car_bank_angle < -0.01) car_bank_angle += 0.01;
+        else car_bank_angle = 0.0;
+    }
 
     switch (car_state) {
         case 0: // coasting
@@ -169,22 +177,26 @@ static void update_car_physics(int64_t current_time) {
             if (car_vel_ms > 5.0) {
                 // centrifugal force v^2 / r. Min radius 30m
                 car_accel_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                // gradually bank road up to 15 degrees (-0.26 radians)
+                if (car_bank_angle > -0.26) car_bank_angle -= 0.01;
             }
             break;
         case 4: // turn right
             if (car_vel_ms > 5.0) {
                 car_accel_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+                // gradually bank road up to +15 degrees (+0.26 radians)
+                if (car_bank_angle < 0.26) car_bank_angle += 0.01;
             }
             break;
         case 5: // hill up (concave up -> positive Z felt force)
-            // min radius 100 meters = 400/100 = 4 m/s^2 (~0.4g max)
+            // min radius 30 meters = 400/30 = 13.3 m/s^2 (~1.36g max)
             if (car_vel_ms > 5.0) {
-                car_accel_z = (car_vel_ms * car_vel_ms / 100.0) / 9.8;
+                car_accel_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
             }
             break;
         case 6: // hill down (convex -> negative Z felt force)
             if (car_vel_ms > 5.0) {
-                car_accel_z = -(car_vel_ms * car_vel_ms / 100.0) / 9.8;
+                car_accel_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
             }
             break;
     }
@@ -230,22 +242,30 @@ bool get_sample_stru(readings_struct_t *readings) {
         case KS_END: z_g = BASE_G; break;
     }
 
-    // Apply baseline car physics to axes
+    // Key impact force occurs along the physical z-axis of the key structure
+    double total_unbanked_z = z_g + car_accel_z;
+    double total_unbanked_y = car_accel_y;
+    
+    // Apply banking to the car/key chassis
+    // Y' = Y*cos(theta) - Z*sin(theta)
+    // Z' = Y*sin(theta) + Z*cos(theta)
+    double banked_y = total_unbanked_y * cos(car_bank_angle) - total_unbanked_z * sin(car_bank_angle);
+    double banked_z = total_unbanked_y * sin(car_bank_angle) + total_unbanked_z * cos(car_bank_angle);
+
+    // Apply baseline car physics to axes with noise
     readings->x_acc = car_accel_x + frand_noise();
-    readings->y_acc = car_accel_y + frand_noise();
+    readings->y_acc = banked_y + frand_noise();
+    readings->z_acc = banked_z + frand_noise();
     
-    // Z axis gets gravity, hill effects, and the actual morse code spikes
-    readings->z_acc = z_g + car_accel_z + frand_noise();
+    // Apply 3.0g hardware clipping
+    if (readings->x_acc > 3.0) readings->x_acc = 3.0;
+    if (readings->x_acc < -3.0) readings->x_acc = -3.0;
     
-    // Apply 1.5g hardware clipping
-    if (readings->x_acc > 1.5) readings->x_acc = 1.5;
-    if (readings->x_acc < -1.5) readings->x_acc = -1.5;
+    if (readings->y_acc > 3.0) readings->y_acc = 3.0;
+    if (readings->y_acc < -3.0) readings->y_acc = -3.0;
     
-    if (readings->y_acc > 1.5) readings->y_acc = 1.5;
-    if (readings->y_acc < -1.5) readings->y_acc = -1.5;
-    
-    if (readings->z_acc > 1.5) readings->z_acc = 1.5;
-    if (readings->z_acc < -1.5) readings->z_acc = -1.5;
+    if (readings->z_acc > 3.0) readings->z_acc = 3.0;
+    if (readings->z_acc < -3.0) readings->z_acc = -3.0;
 
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;

@@ -40,21 +40,37 @@ int main(void) {
     } pulses[MAX_PULSES];
     int num_pulses = 0;
 
+    double last_z = -1.0;
+    double last_y = 0.0;
+    bool first_sample = true;
+
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
         
-        // Use derivative of acceleration to find the stop spikes!
-        // Car movement maxes out around 0.4g force spread out over ~2 seconds.
-        // That's a tiny delta per 100usec sample.
-        // A Morse Key stop generates ~500g in 100usec. Even clipped to 1.5,
-        // it means the absolute check remains highly reliable since driving caps at 0.4g.
+        if (first_sample) {
+            last_z = r.z_acc;
+            last_y = r.y_acc;
+            first_sample = false;
+        }
+
+        // Compute instantaneous change across axes
+        double dz = r.z_acc - last_z;
+        double dy = r.y_acc - last_y;
         
-        // If the reading pins at closely to the positive 1.5g limit, it's hitting the bottom
-        bool spike_down = (r.z_acc > 1.4);
+        // During car banking and clipping, z_acc can continuously peg at -1.5g. 
+        // We can no longer rely on absolute floors because car cresting a 30m hill pegs to -1.5g too.
+        // But the delta (rate of change) over 100usec is still massive despite clipping hitting limits.
         
-        // If the reading pins at closely to the negative 1.5g limit, it's hitting the top.
-        // Even with car physics pushing z_acc to -1.4g, the hit is -1.5g.
-        bool spike_up = (r.z_acc < -1.45);
+        // Positive Z jump -> spike DOWN
+        // Negative Z jump -> spike UP
+        // If clipped, we might jump from -0.5 to +1.5 = delta +2.0
+        // Or if banked, both Y and Z jump simultaneously.
+        // Car physics take seconds to change, so dy/dz without strikes is ~0.0001 per sample.
+        // Therefore, any massive jump > 0.6g instantaneously is 100% a key impact!
+        
+        bool impact = (dy*dy + dz*dz > 0.36); // Magnitude > 0.6g
+        bool spike_down = impact && (dz > 0); 
+        bool spike_up = impact && (dz < 0);
         
         // Use a cooldown or state lock to avoid bouncing on recovery
         if (spike_down && !is_down) {
@@ -91,6 +107,9 @@ int main(void) {
                 break;
             }
         }
+        
+        last_z = r.z_acc;
+        last_y = r.y_acc;
     }
     
     if (num_pulses == 0) return 0;
