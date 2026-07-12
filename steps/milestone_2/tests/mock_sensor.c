@@ -109,7 +109,6 @@ static void build_timeline() {
             double td_sec = transit_down_us / 1000000.0;
             double tu_sec = transit_up_us / 1000000.0;
             
-            // Simplify lateral transit force to an observable roughly constant push force (+/- 0.3g)
             double travel_down_g = -(2.0*0.002)/(td_sec*td_sec)/9.8;
             double travel_up_g = (2.0*0.002)/(tu_sec*tu_sec)/9.8;
             

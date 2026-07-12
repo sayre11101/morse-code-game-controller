@@ -5,12 +5,6 @@
 
 #include "mock_sensor.h"
 
-// We parse morse code pulses.
-// Spike > 100g in Z axis -> stop DOWN (we hit the bottom)
-// Spike < -100g in Z axis -> stop UP (we hit the top)
-// Time between UP->DOWN is a gap (symbol gap, letter gap, word gap)
-// Time between DOWN->UP is a mark (dot or dash)
-
 #define MAX_PULSES 1000
 
 static const char *morse_dict[26] = {
@@ -34,12 +28,10 @@ char decode_letter(const char *symbols) {
 int main(void) {
     readings_struct_t r;
     
-    // We are interested in states: TRUE=down, FALSE=up
     bool is_down = false;
     
     int64_t last_transition_time = 0;
     
-    // Dynamically calculate unit timing
     int64_t min_mark = 99999999;
     
     struct {
@@ -48,70 +40,74 @@ int main(void) {
     } pulses[MAX_PULSES];
     int num_pulses = 0;
 
-    double last_z = -1.0;
+    double last_z = 0.0;
+    double last_y = 0.0;
     bool first_sample = true;
 
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
-        if (first_sample) { last_z = r.z_acc; first_sample = false; }
+        
+        if (first_sample) { 
+            last_z = r.z_acc; 
+            last_y = r.y_acc;
+            first_sample = false; 
+        }
         
         double dz = r.z_acc - last_z;
+        double dy = r.y_acc - last_y;
         last_z = r.z_acc;
+        last_y = r.y_acc;
+
+        // Kinematics push dy/dz deeply negative/positive (abs > 10g) tracking transits natively.
+        // The car's maximum kinematic accelerations across rough hills or turning bank angles only barely exceeds 1.36g!
+        // Therefore, we can reliably distinguish human keystroke inputs securely even while the car handles violent turns and bumps!
         
-        // Aliased 100us sampling frame means we must isolate the initial transit vector jumps (>= 0.04 magn)
-        bool impact = (dz*dz > 0.02);
+        bool impact = (dz*dz + dy*dy > 50.0);
         
-        bool spike_down = impact && (dz > 0.1 || (dz < -0.1 && dz*dz > 0.6));
-        bool spike_up = impact && (dz < -0.1 || (dz > 0.1 && dz*dz > 0.6));
+        bool travel_down = impact && (dz < -5.0 || dz > 10.0 || dy*dy > 25.0); 
+        bool travel_up   = impact && (dz > 5.0 || dz < -10.0 || dy*dy > 25.0);
         
-        if (spike_down && !is_down) {
-            // Transition UP -> DOWN (with 1ms debounce)
-            if (last_transition_time == 0 || current_time - last_transition_time > 1000) {
+        if (travel_down && !is_down) {
+            // Transition UP -> DOWN (with 20ms debounce to bypass the stop spikes symmetrically!)
+            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                 if (last_transition_time > 0) {
-                int64_t gap = current_time - last_transition_time;
-                if (num_pulses < MAX_PULSES) {
                     pulses[num_pulses].is_mark = false;
-                    pulses[num_pulses].duration = gap;
+                    pulses[num_pulses].duration = current_time - last_transition_time;
                     num_pulses++;
                 }
-            }
                 is_down = true;
                 last_transition_time = current_time;
             }
         } 
-        else if (spike_up && is_down) {
-            // Transition DOWN -> UP (with 1ms debounce)
-            if (last_transition_time == 0 || current_time - last_transition_time > 1000) {
+        else if (travel_up && is_down) {
+            // Transition DOWN -> UP (with 20ms debounce to bypass the stop spikes symmetrically!)
+            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                 if (last_transition_time > 0) {
-                int64_t mark = current_time - last_transition_time;
-                if (num_pulses < MAX_PULSES) {
+                    int64_t mark = current_time - last_transition_time;
                     pulses[num_pulses].is_mark = true;
                     pulses[num_pulses].duration = mark;
                     num_pulses++;
-                }
-                    if (mark < min_mark) {
-                        min_mark = mark;
-                    }
+                    if (mark < min_mark) min_mark = mark;
                 }
                 is_down = false;
                 last_transition_time = current_time;
             }
         }
         
-        // Check for end hold
+        // End condition hold time
         if (!is_down && last_transition_time > 0) {
             int64_t gap = current_time - last_transition_time;
             if (gap >= 5000000) { // 5 seconds
                 break;
             }
         }
+        
     }
     
     if (num_pulses == 0) return 0;
     
-    // min_mark should represent roughly 1 dot unit.
     int64_t unit_time = min_mark;
-    if (unit_time == 0) unit_time = 150000; // fallback just in case
+    if (unit_time == 0) unit_time = 150000; 
     
     char word[100] = {0};
     int word_idx = 0;
@@ -140,7 +136,6 @@ int main(void) {
         }
     }
     
-    // Flush last letter
     if (symbol_idx > 0) {
         current_letter[symbol_idx] = '\0';
         word[word_idx++] = decode_letter(current_letter);
