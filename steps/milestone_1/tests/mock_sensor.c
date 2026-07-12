@@ -134,7 +134,7 @@ static void build_timeline() {
         const char *symbols = morse_dict[char_idx];
         for (int j = 0; symbols[j] != '\0'; j++) {
             // Randomize transit time dynamically between 3ms and 6ms for down strike
-            int64_t transit_down_us = 3000 + (rand() % 3001);
+            int64_t transit_down_us = 2000 + (rand() % 4001);
             // Randomize transit time dynamically between 4ms and 5ms for up release
             int64_t transit_up_us = 4000 + (rand() % 1001);
 

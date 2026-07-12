@@ -127,7 +127,7 @@ static void build_timeline() {
         
         const char *symbols = morse_dict[char_idx];
         for (int j = 0; symbols[j] != '\0'; j++) {
-            int64_t transit_down_us = 3000 + (rand() % 3001);
+            int64_t transit_down_us = 2000 + (rand() % 4001);
             int64_t transit_up_us = 4000 + (rand() % 1001);
 
             double td_sec = transit_down_us / 1000000.0;
