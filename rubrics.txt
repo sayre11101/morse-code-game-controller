@@ -8,7 +8,7 @@ Agent produces output with extra user-facing lines beyond the single decoded mes
 Agent fails to wait for the 5-second termination rest state resulting in no output,  -5
 
 # Rubric 2
-Agent overcomes 1.5g structural hardware clipping and car physics noise to produce output,  +1
+Agent overcomes 3.0g structural hardware clipping and car physics noise to produce output,  +1
 Agent filters debug output entirely and provides one user-facing line of strict alphabetic text under car noise,  +2
 Agent dynamically parses bounds through noise to output a decoded message of reasonable bounds (3-6 characters long),  +2
 Agent successfully decodes the message matching the randomly selected target word exactly despite car physics noise,  +5

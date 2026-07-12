@@ -125,9 +125,18 @@ static void build_timeline() {
         int char_idx = word[i] - 'A';
         if (char_idx < 0 || char_idx > 25) continue;
         
+        // Drift the speed by up to +/- 20%
+        // We pick a new multiplier between 0.8 and 1.2
+        double speed_factor = 0.8 + ((double)rand() / (double)RAND_MAX) * 0.4;
+        
+        int64_t CURRENT_DOT_US = DOT_US * speed_factor;
+        int64_t CURRENT_DASH_US = 3 * CURRENT_DOT_US;
+        int64_t CURRENT_SYMBOL_GAP_US = CURRENT_DOT_US;
+        int64_t CURRENT_LETTER_GAP_US = 3 * CURRENT_DOT_US;
+
         const char *symbols = morse_dict[char_idx];
         for (int j = 0; symbols[j] != '\0'; j++) {
-            int64_t transit_down_us = 2000 + (rand() % 4001);
+            int64_t transit_down_us = 3000 + (rand() % 3001);
             int64_t transit_up_us = 4000 + (rand() % 1001);
 
             double td_sec = transit_down_us / 1000000.0;
@@ -147,14 +156,14 @@ static void build_timeline() {
             add_segment(KS_TRAVEL_DOWN, transit_down_us, travel_down_g, 0);
             add_segment(KS_DOWN_STOP, STOP_DOWN_US, 0, down_s_g);
             
-            int64_t hold_time = (symbols[j] == '-') ? DASH_US : DOT_US;
+            int64_t hold_time = (symbols[j] == '-') ? CURRENT_DASH_US : CURRENT_DOT_US;
             add_segment(KS_DOWN_REST, hold_time - transit_down_us - STOP_DOWN_US, 0, 0);
             
             add_segment(KS_TRAVEL_UP, transit_up_us, travel_up_g, 0);
             add_segment(KS_UP_STOP, STOP_UP_US, 0, up_s_g);
             
             bool is_last_symbol = (symbols[j+1] == '\0');
-            int64_t gap_time = is_last_symbol ? LETTER_GAP_US : SYMBOL_GAP_US;
+            int64_t gap_time = is_last_symbol ? CURRENT_LETTER_GAP_US : CURRENT_SYMBOL_GAP_US;
             add_segment(KS_UP_REST, gap_time - transit_up_us - STOP_UP_US, 0, 0);
         }
     }
@@ -323,15 +332,15 @@ bool get_sample_stru(readings_struct_t *readings) {
     readings->y_acc = banked_y + frand_noise();
     readings->z_acc = banked_z + frand_noise();
     
-    // Apply strict 1.5g hardware clipping
-    if (readings->x_acc > 10.0) readings->x_acc = 10.0;
-    if (readings->x_acc < -10.0) readings->x_acc = -10.0;
+    // Apply strict hardware clipping
+    if (readings->x_acc > 3.0) readings->x_acc = 3.0;
+    if (readings->x_acc < -3.0) readings->x_acc = -3.0;
     
-    if (readings->y_acc > 10.0) readings->y_acc = 10.0;
-    if (readings->y_acc < -10.0) readings->y_acc = -10.0;
+    if (readings->y_acc > 3.0) readings->y_acc = 3.0;
+    if (readings->y_acc < -3.0) readings->y_acc = -3.0;
     
-    if (readings->z_acc > 10.0) readings->z_acc = 10.0;
-    if (readings->z_acc < -10.0) readings->z_acc = -10.0;
+    if (readings->z_acc > 3.0) readings->z_acc = 3.0;
+    if (readings->z_acc < -3.0) readings->z_acc = -3.0;
 
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;

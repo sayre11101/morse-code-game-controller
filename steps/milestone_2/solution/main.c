@@ -40,57 +40,61 @@ int main(void) {
     } pulses[MAX_PULSES];
     int num_pulses = 0;
 
-    double last_z = 0.0;
-    double last_y = 0.0;
-    bool first_sample = true;
+    // Moving average filter
+    double avg_z = -1.0;
+    
+    // Impact threshold parameters
+    bool in_transit = false;
 
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
         
-        if (first_sample) { 
-            last_z = r.z_acc; 
-            last_y = r.y_acc;
-            first_sample = false; 
-        }
+        // Slow moving average to track baseline gravity and car acceleration.
+        // The car maneuvers happen on the order of seconds.
+        // At 10kHz (100us), alpha=0.0001 means a time constant of ~10000 samples = ~1 second.
+        avg_z = avg_z * 0.999 + r.z_acc * 0.001;
         
-        double dz = r.z_acc - last_z;
-        double dy = r.y_acc - last_y;
-        last_z = r.z_acc;
-        last_y = r.y_acc;
+        // Key impacts are quick. We look for the deviation from the moving baseline!
+        // Down strike is a massive negative spike.
+        // Return up is a massive positive spike.
+        
+        double diff = r.z_acc - avg_z;
 
-        // Kinematics push dy/dz deeply negative/positive (abs > 10g) tracking transits natively.
-        // The car's maximum kinematic accelerations across rough hills or turning bank angles only barely exceeds 1.36g!
-        // Therefore, we can reliably distinguish human keystroke inputs securely even while the car handles violent turns and bumps!
+        bool spike_down = (diff < -1.5);
+        bool spike_up   = (diff > +1.5);
         
-        bool impact = (dz*dz + dy*dy > 50.0);
-        
-        bool travel_down = impact && (dz < -5.0 || dz > 10.0 || dy*dy > 25.0); 
-        bool travel_up   = impact && (dz > 5.0 || dz < -10.0 || dy*dy > 25.0);
-        
-        if (travel_down && !is_down) {
-            // Transition UP -> DOWN (with 20ms debounce to bypass the stop spikes symmetrically!)
-            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
-                if (last_transition_time > 0) {
-                    pulses[num_pulses].is_mark = false;
-                    pulses[num_pulses].duration = current_time - last_transition_time;
-                    num_pulses++;
+        if (spike_down && !is_down) {
+            in_transit = true;
+        } else if (spike_up && is_down) {
+            in_transit = true;
+        } else if (in_transit && diff > -0.5 && diff < 0.5) {
+            // Settled after transit
+            if (!is_down) {
+                // Was UP, completed travel DOWN
+                if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
+                    if (last_transition_time > 0) {
+                        pulses[num_pulses].is_mark = false;
+                        pulses[num_pulses].duration = current_time - last_transition_time;
+                        num_pulses++;
+                    }
+                    is_down = true;
+                    last_transition_time = current_time;
                 }
-                is_down = true;
-                last_transition_time = current_time;
-            }
-        } 
-        else if (travel_up && is_down) {
-            // Transition DOWN -> UP (with 20ms debounce to bypass the stop spikes symmetrically!)
-            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
-                if (last_transition_time > 0) {
-                    int64_t mark = current_time - last_transition_time;
-                    pulses[num_pulses].is_mark = true;
-                    pulses[num_pulses].duration = mark;
-                    num_pulses++;
-                    if (mark < min_mark) min_mark = mark;
+                in_transit = false;
+            } else if (is_down) {
+                // Was DOWN, completed travel UP
+                if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
+                    if (last_transition_time > 0) {
+                        int64_t mark = current_time - last_transition_time;
+                        pulses[num_pulses].is_mark = true;
+                        pulses[num_pulses].duration = mark;
+                        num_pulses++;
+                        if (mark < min_mark) min_mark = mark;
+                    }
+                    is_down = false;
+                    last_transition_time = current_time;
                 }
-                is_down = false;
-                last_transition_time = current_time;
+                in_transit = false;
             }
         }
         
@@ -106,20 +110,23 @@ int main(void) {
     
     if (num_pulses == 0) return 0;
     
-    int64_t unit_time = min_mark;
-    if (unit_time == 0) unit_time = 150000; 
-    
+    // Moving average tracking to handle drift
+    int64_t running_dot_us = min_mark;
+    if (running_dot_us == 0) running_dot_us = 150000;
+
     char word[100] = {0};
     int word_idx = 0;
     char current_letter[10] = {0};
     int symbol_idx = 0;
-    
+
     for (int i = 0; i < num_pulses; i++) {
-        double units = (double)pulses[i].duration / (double)unit_time;
-        
+        double units = (double)pulses[i].duration / (double)running_dot_us;
+
         if (pulses[i].is_mark) {
             if (units < 2.0) {
                 current_letter[symbol_idx++] = '.';
+                // update running average slowly using true dots
+                running_dot_us = (int64_t)((running_dot_us * 0.8) + (pulses[i].duration * 0.2));
             } else {
                 current_letter[symbol_idx++] = '-';
             }
@@ -128,8 +135,8 @@ int main(void) {
                 current_letter[symbol_idx] = '\0';
                 word[word_idx++] = decode_letter(current_letter);
                 symbol_idx = 0;
-                
-                if (units >= 6.0) { // Word gap
+
+                if (units >= 5.0) { // Word gap
                     word[word_idx++] = ' ';
                 }
             }
