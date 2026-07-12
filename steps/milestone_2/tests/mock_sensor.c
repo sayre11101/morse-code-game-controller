@@ -360,7 +360,11 @@ __attribute__((destructor))
 static void write_final_count() {
     FILE *fcalls = fopen("/app/get_sample_stru_calls.txt", "w");
     if (fcalls) {
-        fprintf(fcalls, "%lld\n", current_sample);
+        int64_t expected_calls = 0;
+        if (num_segments > 0) {
+            expected_calls = timeline[num_segments-1].end_us / 1000;
+        }
+        fprintf(fcalls, "%lld %lld\n", (long long)current_sample, (long long)expected_calls);
         fclose(fcalls);
     }
 }
