@@ -2,3 +2,5 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$SCRIPT_DIR/solve2.sh"
+
+cp /solution/main.c /app/main.c

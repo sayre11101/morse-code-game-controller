@@ -161,8 +161,15 @@ static double frand_noise() {
 
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        // Seed randomness dynamically to ensure different physics curves and dot timings per test
-        srand(time(NULL));
+        int seed_val = 42;
+        FILE *sf = fopen("/tests/seed.txt", "r");
+        if (sf) {
+            if (fscanf(sf, "%d", &seed_val) != 1) {
+                seed_val = 42;
+            } 
+            fclose(sf);
+        }
+        srand(seed_val);
         build_timeline();
         current_time_us = 0;
         current_sample = 0;

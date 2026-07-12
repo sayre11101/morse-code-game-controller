@@ -21,8 +21,6 @@ SELECTED_WORD=${WORDS[$INDEX]}
 echo "$SELECTED_WORD" > /tests/secret_word.txt
 echo "42" > /tests/seed.txt
 
-cp /solution/main.c /app/main.c
-
 
 # Compile the files
 cd /app

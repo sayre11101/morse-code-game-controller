@@ -234,10 +234,12 @@ static double frand_noise() {
 
 bool get_sample_stru(readings_struct_t *readings) {
     if (!initialized) {
-        int seed_val = time(NULL);
+        int seed_val = 42;
         FILE *sf = fopen("/tests/seed.txt", "r");
         if (sf) {
-            if (fscanf(sf, "%d", &seed_val) != 1) seed_val = time(NULL);
+            if (fscanf(sf, "%d", &seed_val) != 1) {
+                seed_val = 42;
+            } 
             fclose(sf);
         }
         srand(seed_val);
