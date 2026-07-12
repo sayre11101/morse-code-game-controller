@@ -1,7 +1,7 @@
 # Rubric 1
 Agent produces output from the executable,  +1
 Agent filters debug output entirely and provides one user-facing line of strict alphabetic text,  +2
-Agent dynamically parses bounds to output a decoded message of reasonable bounds (3-6 characters long),  +2
+Agent dynamically parses bounds to output a decoded message of reasonable bounds (13-50 characters long),  +2
 Agent successfully decodes the message matching the randomly selected target word exactly,  +5
 Agent outputs completely corrupted or unrelated output that is not alphabetic text,  -2
 Agent produces output with extra user-facing lines beyond the single decoded message line,  -3

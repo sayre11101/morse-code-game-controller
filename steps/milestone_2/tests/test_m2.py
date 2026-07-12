@@ -43,16 +43,10 @@ class TestMilestone2:
         )
 
     def test_output_is_text(self, app_output):
-        """Verify output is strict decoded text (A-Z and spaces only) and exactly one user line."""
-        candidates = _extract_decoded_message_candidates(app_output)
-        assert len(candidates) == 1, (
-            "FAIL: Expected exactly one decoded-message line and no extra user-facing output. "
-            f"Found {len(candidates)} candidate lines: {candidates}"
-        )
-        msg_line = candidates[0]
-        assert bool(re.fullmatch(r'[A-Z ]+', msg_line)), (
-            f"FAIL: Output '{msg_line}' contains lowercase or non-letter/non-space characters. "
-            "Expected ONLY UPPERCASE alphabetic characters and spaces in the decoded message line."
+        """Verify output is strict decoded text (A-Z and spaces only) exactly one user line ending in \n."""
+        assert bool(re.fullmatch(r'[A-Z ]+\n', app_output)), (
+            "FAIL: Output must be exactly one single line ending with \\n containing only UPPERCASE alphabetic characters and spaces. "
+            f"Got: {repr(app_output)}"
         )
 
     def test_output_length_reasonable(self, app_output):

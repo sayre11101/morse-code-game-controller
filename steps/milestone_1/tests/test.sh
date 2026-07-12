@@ -40,19 +40,6 @@ python3 -m pytest \
     /tests/test_m1.py -rA
 PYTEST_RC=$?
 
-# Restore baseline starter main.c to avoid carrying milestone solution forward.
-if [ -f /tests/main.c.baseline ]; then
-  if ! cp /tests/main.c.baseline /app/main.c; then
-    echo "ERROR: Failed to restore baseline main.c for next milestone"
-    PYTEST_RC=1
-  fi
-else
-  if ! cp /app/main.c.orig /app/main.c; then
-    echo "ERROR: Failed to restore baseline main.c for next milestone"
-    PYTEST_RC=1
-  fi
-fi
-
 test "$PYTEST_RC" -eq 0
 RC=$?
 if [ "$RC" -eq 0 ]; then
