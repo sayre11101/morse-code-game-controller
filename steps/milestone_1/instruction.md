@@ -1,5 +1,3 @@
-# Milestone 1
-
 Implement this milestone in /app/main.c.
 
 This challenge is to receive a message of characters and spaces in Morse Code. You will find a reference sheet in /app/morse-code-sheet.pdf. Instead of hearing Morse Code, which is the normal way of receiving, you will be observing the acceleration of the key as it is operated by a simulated human operator. There is an API for reading the motion of the key in /app/mock_sensor.h. The API returns a boolean if a new sample is ready. It fills in a caller supplied structure which contains the sample number, the sampling rate and the accelerations in x,y and z axes. The z axis is downward, the same direction as the operator will push the key. The x direction is the away from the operator and the y direction is the left and right of the operator. The accelerations are in units of g, or 9.8 m/sec².
