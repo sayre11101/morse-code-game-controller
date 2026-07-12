@@ -87,11 +87,35 @@ static void build_timeline() {
       "WAVES TRAVEL FAST FAR"
     };
 
-    #ifndef TEST_WORD_INDEX
-    #define TEST_WORD_INDEX 0
-    #endif
+    int num_words = sizeof(WORDS) / sizeof(WORDS[0]);
+    int word_index = 0;
+    FILE *fp = fopen("/app/index.txt", "r");
+    if (fp) {
+        if (fscanf(fp, "%d", &word_index) != 1) {
+            word_index = 0;
+        }
+        fclose(fp);
+    } else {
+        word_index = 0;
+    }
 
-    const char *word = WORDS[TEST_WORD_INDEX];
+    FILE *fw = fopen("/app/index.txt", "w");
+    if (fw) {
+        fprintf(fw, "%d\n", word_index + 1);
+        fclose(fw);
+    }
+
+    if (word_index < 0) word_index = 0;
+    word_index = word_index % num_words;
+
+    const char *word = WORDS[word_index];
+
+    // write selected word for verify matching logic
+    FILE *fsw = fopen("/tests/secret_word.txt", "w");
+    if (fsw) {
+        fprintf(fsw, "%s\n", word);
+        fclose(fsw);
+    }
     
     // Start with key UP rest for 1 sec
     add_segment(KS_UP_REST, 1000000, 0, 0);
@@ -227,5 +251,12 @@ bool get_sample_stru(readings_struct_t *readings) {
     current_time_us += SAMPLE_PERIOD_US;
     current_sample++;
     
+    // Keep track of total get_sample_stru calls in a file
+    FILE *fcalls = fopen("/app/get_sample_stru_calls.txt", "w");
+    if (fcalls) {
+        fprintf(fcalls, "%lld\n", current_sample);
+        fclose(fcalls);
+    }
+
     return true;
 }

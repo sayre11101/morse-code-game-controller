@@ -15,16 +15,16 @@ WORDS=(
   "WAVES TRAVEL FAST FAR"
 )
 
-# Generate a random word index and write to verifier-only file
-INDEX=$((RANDOM % 8))
-SELECTED_WORD=${WORDS[$INDEX]}
-echo "$SELECTED_WORD" > /tests/secret_word.txt
 echo "42" > /tests/seed.txt
+
+# Get length of words array
+NUM_WORDS=${#WORDS[@]}
+echo "$NUM_WORDS" > /tests/num_words.txt
 
 # Compile the files
 cd /app
-# Compile binary to /app/app.out and inject TEST_WORD_INDEX compiling directly against the tests mock
-gcc -Wall -Wextra -O0 -g -I/app -DTEST_WORD_INDEX=$INDEX -o /app/app.out /app/main.c /tests/mock_sensor.c -lm
+# Compile binary to /app/app.out compiling directly against the tests mock
+gcc -Wall -Wextra -O0 -g -I/app -o /app/app.out /app/main.c /tests/mock_sensor.c -lm
 COMPILE_RC=$?
 
 if [ "$COMPILE_RC" -ne 0 ]; then
@@ -32,6 +32,8 @@ if [ "$COMPILE_RC" -ne 0 ]; then
   echo 0 > /logs/verifier/reward.txt
   exit 1
 fi
+
+rm -f /app/index.txt
 
 set +e
 python3 -m pytest \

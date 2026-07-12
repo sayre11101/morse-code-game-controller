@@ -22,7 +22,14 @@ def _extract_decoded_message_candidates(output_text):
     ]
 
 
-@pytest.fixture(scope="module")
+def get_num_words():
+    try:
+        with open("/tests/num_words.txt") as f:
+            return int(f.read().strip())
+    except Exception:
+        return 8
+
+@pytest.fixture(scope="function", params=range(get_num_words()))
 def app_output():
     """Run the compiled binary and return stdout."""
     binary_path = "/app/app.out"
@@ -30,6 +37,8 @@ def app_output():
         pytest.fail(f"Could not find compiled binary at {binary_path}")
         
     result = subprocess.run([binary_path], capture_output=True, text=True, timeout=10)
+    
+    assert result.returncode == 0, f"FAIL: Binary exited with non-zero return code {result.returncode}"
     return result.stdout
 
 
@@ -40,6 +49,18 @@ class TestMilestone1:
         msg_line = candidates[-1] if candidates else None
         assert msg_line is not None and len(msg_line) > 0, (
             "FAIL: No decoded message output found."
+        )
+        
+    def test_get_sample_stru_calls(self, app_output):
+        """Verify that main loop requested at least roughly appropriate mock readings."""
+        try:
+            with open("/app/get_sample_stru_calls.txt", "r") as f:
+                calls = int(f.read().strip())
+        except Exception:
+            pytest.fail("FAIL: Agent did not call get_sample_stru correctly.")
+
+        assert calls > 20, (
+            f"FAIL: Agent called API get_sample_stru {calls} times. Must be > 20."
         )
 
     def test_output_is_text(self, app_output):
