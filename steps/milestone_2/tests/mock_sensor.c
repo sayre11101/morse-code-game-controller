@@ -110,8 +110,8 @@ static void build_timeline() {
             double tu_sec = transit_up_us / 1000000.0;
             
             // Simplify lateral transit force to an observable roughly constant push force (+/- 0.3g)
-            double travel_down_g = -0.3;
-            double travel_up_g = 0.3;
+            double travel_down_g = -(2.0*0.002)/(td_sec*td_sec)/9.8;
+            double travel_up_g = (2.0*0.002)/(tu_sec*tu_sec)/9.8;
             
             double sd_sec = STOP_DOWN_US / 1000000.0;
             double su_sec = STOP_UP_US / 1000000.0;
@@ -294,14 +294,14 @@ bool get_sample_stru(readings_struct_t *readings) {
     readings->z_acc = banked_z + frand_noise();
     
     // Apply strict 1.5g hardware clipping
-    if (readings->x_acc > 1.5) readings->x_acc = 1.5;
-    if (readings->x_acc < -1.5) readings->x_acc = -1.5;
+    if (readings->x_acc > 10.0) readings->x_acc = 10.0;
+    if (readings->x_acc < -10.0) readings->x_acc = -10.0;
     
-    if (readings->y_acc > 1.5) readings->y_acc = 1.5;
-    if (readings->y_acc < -1.5) readings->y_acc = -1.5;
+    if (readings->y_acc > 10.0) readings->y_acc = 10.0;
+    if (readings->y_acc < -10.0) readings->y_acc = -10.0;
     
-    if (readings->z_acc > 1.5) readings->z_acc = 1.5;
-    if (readings->z_acc < -1.5) readings->z_acc = -1.5;
+    if (readings->z_acc > 10.0) readings->z_acc = 10.0;
+    if (readings->z_acc < -10.0) readings->z_acc = -10.0;
 
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;

@@ -3,13 +3,14 @@
 
 int main(void)
 {
+    // This string is NOT one of the possible answers.
+    // It is only for reference to see what a string will look like
     const char solution[] = {"THE ANSWER IS JULY"};
-    /*
-     * Implement milestone logic in this file.
-     * Milestone 1: state timeline extraction and timing output.
-     * Milestone 2: Morse decoding output.
-     */
 
+
+    // Implement your milestone logic here to determine correct solution.
+
+    // Print out your solution like this:
      printf("%s\n", solution);
 
      return 0;

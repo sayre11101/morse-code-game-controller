@@ -40,51 +40,36 @@ int main(void) {
     } pulses[MAX_PULSES];
     int num_pulses = 0;
 
-    double last_z = -1.0;
+    double last_z = 0.0;
     double last_y = 0.0;
     bool first_sample = true;
 
     while (get_sample_stru(&r)) {
         int64_t current_time = r.sample_number * r.sampling_rate_usec;
         
-        if (first_sample) {
-            last_z = r.z_acc;
+        if (first_sample) { 
+            last_z = r.z_acc; 
             last_y = r.y_acc;
-            first_sample = false;
+            first_sample = false; 
         }
-
-        // Compute instantaneous change across axes
+        
         double dz = r.z_acc - last_z;
         double dy = r.y_acc - last_y;
-        
-        // Car banking physics takes seconds to change, so dy/dz naturally sits at ~0.0001 per sample.
-        // However, the finger pushing the key accelerates it rapidly to cross the 2.0mm gap in 3.0ms.
-        // This transit yields a sustained +/- 0.3g (squared > 0.04) delta compared to BASE_G!
-        
-        // Even harder: ADC sampling aliasing can make the subsequent stop spikes (3.0g bounds) randomly DISAPPEAR completely!
-        // We must detect just the initial entry vector into the +/- 0.3g transit phase seamlessly instead of looking for massive jolts.
-        
-        bool impact = (dy*dy + dz*dz > 0.04);
-        
-        // M2 1.5g rigorous clipping: if the chassis is already vibrating near 1.3g, a 0.3g push 
-        // clips the sensor and the delta visually zeroes out. We catch flatlines!
-        bool clipped_top = (r.z_acc > 1.49 || r.y_acc > 1.49) && !is_down;
-        bool clipped_bottom = (r.z_acc < -1.49 || r.y_acc < -1.49) && is_down;
-        if (clipped_top || clipped_bottom) {
-            impact = true;
-            // Prevent spamming the terminal by only announcing when we actually transition!
-        }
+        last_z = r.z_acc;
+        last_y = r.y_acc;
 
-        // If dz is negative, it's either the start of downward transit, or an upward stop spike.
-        // If dz is positive, it's either the end of downward transit (returning to base), or a downward stop spike.
-        // Either indicates a massive polarity flip that shifts the physical key state boundary.
-        bool spike_down = impact && ((dz > 0.1 || clipped_top) || (dz < -0.1 && dy*dy+dz*dz > 0.6));
-        bool spike_up = impact && ((dz < -0.1 || clipped_bottom) || (dz > 0.1 && dy*dy+dz*dz > 0.6));
+        // Kinematics push dy/dz deeply negative/positive (abs > 10g) tracking transits natively.
+        // The car's maximum kinematic accelerations across rough hills or turning bank angles only barely exceeds 1.36g!
+        // Therefore, we can reliably distinguish human keystroke inputs securely even while the car handles violent turns and bumps!
         
-        // Use a cooldown or state lock to avoid bouncing on recovery
-        if (spike_down && !is_down) {
-            // Minimum 1ms spacing to avoid double triggering on an impact spike occurring right after its own transit start!
-            if (last_transition_time == 0 || (current_time - last_transition_time > 1000)) {
+        bool impact = (dz*dz + dy*dy > 50.0);
+        
+        bool travel_down = impact && (dz < -5.0 || dz > 10.0 || dy*dy > 25.0); 
+        bool travel_up   = impact && (dz > 5.0 || dz < -10.0 || dy*dy > 25.0);
+        
+        if (travel_down && !is_down) {
+            // Transition UP -> DOWN (with 20ms debounce to bypass the stop spikes symmetrically!)
+            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                 if (last_transition_time > 0) {
                     pulses[num_pulses].is_mark = false;
                     pulses[num_pulses].duration = current_time - last_transition_time;
@@ -92,12 +77,11 @@ int main(void) {
                 }
                 is_down = true;
                 last_transition_time = current_time;
-                //if (clipped_top) printf("[FLATLINE] Sensor violently clipped forcing DOWN!\n");
             }
         } 
-        else if (spike_up && is_down) {
-            // Must have been down for at least 1ms to count as a transition
-            if (last_transition_time == 0 || (current_time - last_transition_time > 1000)) {
+        else if (travel_up && is_down) {
+            // Transition DOWN -> UP (with 20ms debounce to bypass the stop spikes symmetrically!)
+            if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                 if (last_transition_time > 0) {
                     int64_t mark = current_time - last_transition_time;
                     pulses[num_pulses].is_mark = true;
@@ -107,7 +91,6 @@ int main(void) {
                 }
                 is_down = false;
                 last_transition_time = current_time;
-                //if (clipped_bottom) printf("[FLATLINE] Sensor violently clipped forcing UP!\n");
             }
         }
         
@@ -119,8 +102,6 @@ int main(void) {
             }
         }
         
-        last_z = r.z_acc;
-        last_y = r.y_acc;
     }
     
     if (num_pulses == 0) return 0;
