@@ -30,6 +30,7 @@ COMPILE_RC=$?
 if [ "$COMPILE_RC" -ne 0 ]; then
   echo "ERROR: Compilation failed"
   echo 0 > /logs/verifier/reward.txt
+  exit 0
 fi
 
 rm -f /app/index.txt
