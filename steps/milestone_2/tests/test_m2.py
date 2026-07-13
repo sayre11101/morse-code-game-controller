@@ -89,11 +89,28 @@ class TestMilestone2:
         assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
         msg_line = candidates[0]
 
+        WORDS = [
+            "SOS SEND HELP NOW PLEASE",
+            "RADIO WAVES ARE COOL",
+            "MORSE CODE IS VERY OLD",
+            "PHYSICS AND SOFTWARE",
+            "ACCELEROMETER READS G",
+            "SOLVE THE PUZZLE FAST",
+            "THE CAR IS DRIVING NOW",
+            "WAVES TRAVEL FAST FAR"
+        ]
+
         expected = "SOS SEND HELP NOW PLEASE"
         try:
-            with open("/tests/secret_word.txt", "r") as f:
-                expected = f.read().strip()
-        except FileNotFoundError:
+            with open("/app/index.txt", "r") as f:
+                # the C mock advances index + 1 before using, so to match we fetch the current index - 1
+                curr_idx = int(f.read().strip())
+                # if idx was originally 0, C mock set index.txt to 1
+                word_index = (curr_idx - 1) % len(WORDS)
+                if word_index < 0:
+                    word_index = 0
+                expected = WORDS[word_index]
+        except Exception:
             pass
 
         assert re.fullmatch(r"[A-Z ]{13,50}", expected), (

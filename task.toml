@@ -8,7 +8,7 @@ author_email = "anonymous"
 difficulty = "medium"
 category = "scientific-computing"
 # Options for subcategories are: "long_context", "tool_specific", "api_integration", "db_interaction", "ui_building"
-subcategories = [""]
+subcategories = ["api_integration"]
 # Total milestone count — must match the number of [[steps]] blocks below
 number_of_milestones = 2
 # Size of the codebase: minimal -> 0-20 files, small -> 20+ files, large -> 200+ files

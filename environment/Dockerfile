@@ -4,7 +4,7 @@ WORKDIR /app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-        python3 \
+        python3=3.11.2-1+b1 \
         python3-pip \
         tmux \
         asciinema \

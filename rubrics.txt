@@ -10,7 +10,7 @@ Agent fails to wait for the 5-second termination rest state resulting in no outp
 # Rubric 2
 Agent overcomes 3.0g structural hardware clipping and car physics noise to produce output,  +1
 Agent filters debug output entirely and provides one user-facing line of strict alphabetic text under car noise,  +2
-Agent dynamically parses bounds through noise to output a decoded message of reasonable bounds (3-6 characters long),  +2
+Agent dynamically parses bounds through noise to output a decoded message of reasonable bounds (13-50 characters long),  +2
 Agent successfully decodes the message matching the randomly selected target word exactly despite car physics noise,  +5
 Agent confusingly interprets slow car hills as immediate Morse key impact sequences resulting in corrupted characters,  -2
 Agent loops infinitely or fails to hit proper termination limits inside the car noise and outputs nothing,  -5

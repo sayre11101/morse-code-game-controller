@@ -109,13 +109,6 @@ static void build_timeline() {
     word_index = word_index % num_words;
 
     const char *word = WORDS[word_index];
-
-    // write selected word for verify matching logic
-    FILE *fsw = fopen("/tests/secret_word.txt", "w");
-    if (fsw) {
-        fprintf(fsw, "%s\n", word);
-        fclose(fsw);
-    }
     
     // Start with key UP rest for 1 sec
     add_segment(KS_UP_REST, 1000000, 0, 0);
