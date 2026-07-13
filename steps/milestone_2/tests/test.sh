@@ -2,6 +2,8 @@
 set -uo pipefail
 
 mkdir -p /logs/verifier
+mkdir -p /logs/agentsrc
+mkdir -p /tests/build
 
 echo "42" > /tests/seed.txt
 
@@ -11,8 +13,8 @@ echo "$NUM_WORDS" > /tests/num_words.txt
 
 # Compile the files
 cd /app
-# Compile binary to /app/app.out compiling directly against the tests mock
-gcc -Wall -Wextra -O0 -g -I/app -o /app/app.out /app/main.c /tests/mock_sensor.c -lm
+# Compile binary to /tests/build/app.out compiling directly against the tests mock
+gcc -Wall -Wextra -O0 -g -I/app -o /tests/build/app.out /app/main.c /tests/mock_sensor.c -lm
 COMPILE_RC=$?
 
 if [ "$COMPILE_RC" -ne 0 ]; then
@@ -25,7 +27,7 @@ timestamp=$(date +"%Y%m%d-%H%M%S")
 mainname="main.c-${timestamp}.c"
 cp /app/main.c "/logs/verifier/${mainname}"
 mockname="mock_sensor.c-${timestamp}.c"
-cp /app/mock_sensor.c "/logs/verifier/${mockname}"
+cp /tests/mock_sensor.c "/logs/verifier/${mockname}"
 rm -f /app/index.txt
 
 set +e

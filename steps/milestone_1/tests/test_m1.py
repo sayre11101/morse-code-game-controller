@@ -34,7 +34,7 @@ def get_num_words():
 @pytest.fixture(scope="function", params=range(get_num_words()))
 def app_output():
     """Run the compiled binary and return stdout."""
-    binary_path = "/app/app.out"
+    binary_path = "/tests/build/app.out"
     if not os.path.exists(binary_path):
         pytest.fail(f"Could not find compiled binary at {binary_path}")
         
@@ -56,20 +56,22 @@ class TestMilestone1:
     def test_get_sample_stru_calls(self, app_output):
         """Verify that main loop requested at least roughly appropriate mock readings."""
         try:
-            with open("/app/get_sample_stru_calls.txt", "r") as f:
+            with open("/tests/build/get_sample_stru_calls.txt", "r") as f:
                 content = f.read().strip().split()
                 actual_calls = int(content[0])
-                expected_min_calls = int(content[1]) if len(content) > 1 else 20
+                expected_min_calls = int(content[1])
         except Exception:
-            pytest.fail("FAIL: Agent did not call get_sample_stru correctly or log file is unreadable.")
-        
+            pytest.fail("FAIL: Agent did not call get_sample_stru correctly or log file is unreadable. Could not read generated loop count.")
+
         # Enforce five-second hold logic check (which is strictly 5,000,000 / SAMPLE_PERIOD_US appended to the sample loop iterations mapped via timeline end correctly inside the tests runner file)
+        expected_min_calls += 40000
         assert actual_calls >= expected_min_calls, (
             f"FAIL: The user application bounded too soon and bypassed the IO polling early or failed to sample hold time safely for five full seconds! Expected at least {expected_min_calls} iterations, got {actual_calls}."
         )
 
     def test_output_is_text(self, app_output):
         """Verify output is strictly one single line in stdout with alpha uppercase characters and spaces ending with \n."""
+        # Ensure that the entire stdout is exactly one line matching [A-Z ]+\n without extra debug trash.
         assert bool(re.fullmatch(r'[A-Z ]+\n', app_output)), (
             "FAIL: Output must be exactly one single line ending with \\n containing only UPPERCASE alphabetic characters and spaces. "
             f"Got: {repr(app_output)}"
@@ -105,7 +107,7 @@ class TestMilestone1:
 
         expected = "SOS SEND HELP NOW PLEASE"
         try:
-            with open("/app/index.txt", "r") as f:
+            with open("/tests/build/index.txt", "r") as f:
                 # the C mock advances index + 1 before using, so to match we fetch the current index - 1
                 curr_idx = int(f.read().strip())
                 # if idx was originally 0, C mock set index.txt to 1

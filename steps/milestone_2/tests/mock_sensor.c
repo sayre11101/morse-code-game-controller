@@ -104,7 +104,7 @@ static void build_timeline() {
 
     int num_words = sizeof(WORDS) / sizeof(WORDS[0]);
     int word_index = 0;
-    FILE *fp = fopen("/app/index.txt", "r");
+    FILE *fp = fopen("/tests/build/index.txt", "r");
     if (fp) {
         if (fscanf(fp, "%d", &word_index) != 1) {
             word_index = 0;
@@ -114,7 +114,7 @@ static void build_timeline() {
         word_index = 0;
     }
 
-    FILE *fw = fopen("/app/index.txt", "w");
+    FILE *fw = fopen("/tests/build/index.txt", "w");
     if (fw) {
         fprintf(fw, "%d\n", word_index + 1);
         fclose(fw);
@@ -313,7 +313,7 @@ bool get_sample_stru(readings_struct_t *readings) {
     }
     
     if (current_time_us >= timeline[num_segments-1].end_us) {
-        FILE *fcalls = fopen("/app/get_sample_stru_calls.txt", "w");
+        FILE *fcalls = fopen("/tests/build/get_sample_stru_calls.txt", "w");
         if (fcalls) {
             fprintf(fcalls, "%lld\n", current_sample);
             fclose(fcalls);
@@ -375,13 +375,14 @@ bool get_sample_stru(readings_struct_t *readings) {
 // Clean up function called on normal exit just in case
 __attribute__((destructor))
 static void write_final_count() {
-    FILE *fcalls = fopen("/app/get_sample_stru_calls.txt", "w");
+    FILE *fcalls = fopen("/tests/build/get_sample_stru_calls.txt", "w");
     if (fcalls) {
         int64_t expected_calls = 0;
         if (num_segments > 0) {
-            // Note: Since early exit bounding relies on explicitly returning only loops required for the minimum timeout bounds (i.e < 5s logic inside user agent) 
-            // We just match expected minimum calls safely mapping 5,000,000 bounds tightly without punishing the upper threshold looping out the explicit end arrays!
-            expected_calls = 20;
+            // Provide the duration right UP to where the final wait sequence begins 
+            // since users simply timeout a bit into the final delay!
+            int64_t expected_timeline_duration = timeline[num_segments-2].end_us;
+            expected_calls = expected_timeline_duration / SAMPLE_PERIOD_US;
         }
         fprintf(fcalls, "%lld %lld\n", (long long)current_sample, (long long)expected_calls);
         fclose(fcalls);
