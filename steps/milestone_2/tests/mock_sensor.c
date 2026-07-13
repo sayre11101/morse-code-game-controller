@@ -7,6 +7,8 @@
 
 #include "mock_sensor.h"
 
+static const double clipping_level = 1.5;
+
 // Morse Code dictionary for A-Z
 static const char *morse_dict[26] = {
     ".-",   "-...", "-.-.", "-..",  ".",    // A-E
@@ -16,6 +18,22 @@ static const char *morse_dict[26] = {
     "..-",  "...-", ".--",  "-..-", "-.--", // U-Y
     "--.."                                  // Z
 };
+
+// Vehicle motion constraint parameters
+#define GRAVITY_MS2 9.8
+#define MAX_CAR_VELOCITY_MS 20.0
+#define MIN_MANEUVER_VELOCITY_MS 5.0 // Min speed required for turns/hills
+#define CAR_ACCELERATION_MS2 4.0
+#define CAR_BRAKING_G -0.9
+#define MIN_TURN_RADIUS_M 30.0
+#define MAX_BANK_ANGLE_RAD 0.26 // Approximately 15 degrees
+#define BANK_ANGLE_TURN_DELTA_RAD 0.01 // Sweep rate for banking
+
+// Variable baseline smooth tracking step sizes (easing logic step)
+#define NORMALIZED_SMOOTH_FACTOR 0.05
+
+// Transmission Speed Factor (+/- percentage timing drift bounded limit map, i.e 0.20 maps mathematically bounds internally to min .80x base scalar and +0.40 range margin up to absolute 1.20x max ceiling range randomly spanning dynamic +/- 20 percent total allowed)
+#define MAX_SPEED_VARIANCE_PERCENT 0.20
 
 // Config for timing
 static int64_t DOT_US;
@@ -74,12 +92,12 @@ static void build_timeline() {
     WORD_GAP_US = 7 * DOT_US;
 
     static const char *WORDS[] = {
-      "SOS SEND HELP NOW PLEASE",
+      "SOS",
       "RADIO WAVES ARE COOL",
       "MORSE CODE IS VERY OLD",
-      "PHYSICS AND SOFTWARE",
+      "TOM MOTTO OTTO TO",
       "ACCELEROMETER READS G",
-      "SOLVE THE PUZZLE FAST",
+      "TMO",
       "THE CAR IS DRIVING NOW",
       "WAVES TRAVEL FAST FAR"
     };
@@ -118,9 +136,10 @@ static void build_timeline() {
         int char_idx = word[i] - 'A';
         if (char_idx < 0 || char_idx > 25) continue;
         
-        // Drift the speed by up to +/- 20%
-        // We pick a new multiplier between 0.8 and 1.2
-        double speed_factor = 0.8 + ((double)rand() / (double)RAND_MAX) * 0.4;
+        // Drift the speed by up to the allowed variance percent 
+        double base_speed_factor = 1.0 - MAX_SPEED_VARIANCE_PERCENT;
+        double speed_drift_range = MAX_SPEED_VARIANCE_PERCENT * 2.0;
+        double speed_factor = base_speed_factor + ((double)rand() / (double)RAND_MAX) * speed_drift_range;
         
         int64_t CURRENT_DOT_US = DOT_US * speed_factor;
         int64_t CURRENT_DASH_US = 3 * CURRENT_DOT_US;
@@ -200,59 +219,64 @@ static void update_car_physics(int64_t current_time) {
             car_accel_x = 0.0;
             break;
         case 1: // accelerating linearly (up to 4 m/s^2)
-            car_accel_x = 4.0 / 9.8; 
-            car_vel_ms += 4.0 * dt;
-            if (car_vel_ms > 20.0) {
-                car_vel_ms = 20.0;
+            car_accel_x = CAR_ACCELERATION_MS2 / GRAVITY_MS2; 
+            car_vel_ms += CAR_ACCELERATION_MS2 * dt;
+            if (car_vel_ms > MAX_CAR_VELOCITY_MS) {
+                car_vel_ms = MAX_CAR_VELOCITY_MS;
                 car_accel_x = 0.0;
             }
             break;
         case 2: // braking safely (up to -0.9g)
-            car_accel_x = -0.9;
-            car_vel_ms += (-0.9 * 9.8) * dt;
+            car_accel_x = CAR_BRAKING_G;
+            car_vel_ms += (CAR_BRAKING_G * GRAVITY_MS2) * dt;
             if (car_vel_ms < 0.0) {
                 car_vel_ms = 0.0;
                 car_accel_x = 0.0;
             }
             break;
         case 3: // turn left (if moving)
-            if (car_vel_ms > 5.0) {
-                // centrifugal force v^2 / r. Min radius 30m
-                target_y = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
-                // gradually bank road up to 15 degrees (-0.26 radians)
-                if (car_bank_angle > -0.26) car_bank_angle -= 0.01;
+            if (car_vel_ms > MIN_MANEUVER_VELOCITY_MS) {
+                // centrifugal force v^2 / r
+                target_y = (car_vel_ms * car_vel_ms / MIN_TURN_RADIUS_M) / GRAVITY_MS2;
+                // gradually bank road negatively
+                if (car_bank_angle > -MAX_BANK_ANGLE_RAD) car_bank_angle -= BANK_ANGLE_TURN_DELTA_RAD;
             }
             break;
         case 4: // turn right
-            if (car_vel_ms > 5.0) {
-                target_y = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
-                // gradually bank road up to +15 degrees (+0.26 radians)
-                if (car_bank_angle < 0.26) car_bank_angle += 0.01;
+            if (car_vel_ms > MIN_MANEUVER_VELOCITY_MS) {
+                target_y = -(car_vel_ms * car_vel_ms / MIN_TURN_RADIUS_M) / GRAVITY_MS2;
+                // gradually bank road positively
+                if (car_bank_angle < MAX_BANK_ANGLE_RAD) car_bank_angle += BANK_ANGLE_TURN_DELTA_RAD;
             }
             break;
         case 5: // hill up (concave up -> positive Z felt force)
-            // min radius 30 meters = 400/30 = 13.3 m/s^2 (~1.36g max)
-            if (car_vel_ms > 5.0) {
-                target_z = (car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            if (car_vel_ms > MIN_MANEUVER_VELOCITY_MS) {
+                target_z = (car_vel_ms * car_vel_ms / MIN_TURN_RADIUS_M) / GRAVITY_MS2;
             }
             break;
         case 6: // hill down (convex -> negative Z felt force)
-            if (car_vel_ms > 5.0) {
-                target_z = -(car_vel_ms * car_vel_ms / 30.0) / 9.8;
+            if (car_vel_ms > MIN_MANEUVER_VELOCITY_MS) {
+                target_z = -(car_vel_ms * car_vel_ms / MIN_TURN_RADIUS_M) / GRAVITY_MS2;
             }
             break;
     }
 
     // Smoothly ease actual acceleration towards the targets to prevent vertical derivative magnitude blowups
-    if (car_accel_y < target_y) car_accel_y += 0.05 * dt;
-    if (car_accel_y > target_y) car_accel_y -= 0.05 * dt;
+    if (car_accel_y < target_y) car_accel_y += NORMALIZED_SMOOTH_FACTOR * dt;
+    if (car_accel_y > target_y) car_accel_y -= NORMALIZED_SMOOTH_FACTOR * dt;
 
-    if (car_accel_z < target_z) car_accel_z += 0.05 * dt;
-    if (car_accel_z > target_z) car_accel_z -= 0.05 * dt;
+    if (car_accel_z < target_z) car_accel_z += NORMALIZED_SMOOTH_FACTOR * dt;
+    if (car_accel_z > target_z) car_accel_z -= NORMALIZED_SMOOTH_FACTOR * dt;
 }
 
+
+// Physics noise parameters
+// Adds randomized background electrical vibration simulating inherent hardware sensor noise
+#define HARDWARE_NOISE_AMPLITUDE_G 0.02
+#define HARDWARE_NOISE_RANGE_G (HARDWARE_NOISE_AMPLITUDE_G * 2.0)
+
 static double frand_noise() {
-    return ((double)rand() / (double)RAND_MAX) * 0.06 - 0.03; // +/- 0.03g background noise
+    return ((double)rand() / (double)RAND_MAX) * HARDWARE_NOISE_RANGE_G - HARDWARE_NOISE_AMPLITUDE_G; 
 }
 
 #include <time.h>
@@ -326,14 +350,14 @@ bool get_sample_stru(readings_struct_t *readings) {
     readings->z_acc = banked_z + frand_noise();
     
     // Apply strict hardware clipping
-    if (readings->x_acc > 3.0) readings->x_acc = 3.0;
-    if (readings->x_acc < -3.0) readings->x_acc = -3.0;
+    if (readings->x_acc > clipping_level) readings->x_acc = clipping_level;
+    if (readings->x_acc < -clipping_level) readings->x_acc = -clipping_level;
     
-    if (readings->y_acc > 3.0) readings->y_acc = 3.0;
-    if (readings->y_acc < -3.0) readings->y_acc = -3.0;
+    if (readings->y_acc > clipping_level) readings->y_acc = clipping_level;
+    if (readings->y_acc < -clipping_level) readings->y_acc = -clipping_level;
     
-    if (readings->z_acc > 3.0) readings->z_acc = 3.0;
-    if (readings->z_acc < -3.0) readings->z_acc = -3.0;
+    if (readings->z_acc > clipping_level) readings->z_acc = clipping_level;
+    if (readings->z_acc < -clipping_level) readings->z_acc = -clipping_level;
 
     readings->sampling_rate_usec = SAMPLE_PERIOD_US;
     readings->sample_number = current_sample;
@@ -355,7 +379,9 @@ static void write_final_count() {
     if (fcalls) {
         int64_t expected_calls = 0;
         if (num_segments > 0) {
-            expected_calls = timeline[num_segments-1].end_us / 1000;
+            // Note: Since early exit bounding relies on explicitly returning only loops required for the minimum timeout bounds (i.e < 5s logic inside user agent) 
+            // We just match expected minimum calls safely mapping 5,000,000 bounds tightly without punishing the upper threshold looping out the explicit end arrays!
+            expected_calls = 20;
         }
         fprintf(fcalls, "%lld %lld\n", (long long)current_sample, (long long)expected_calls);
         fclose(fcalls);

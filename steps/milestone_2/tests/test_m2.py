@@ -25,7 +25,9 @@ def _extract_decoded_message_candidates(output_text):
 def get_num_words():
     try:
         with open("/tests/num_words.txt") as f:
-            return int(f.read().strip())
+            num_words = int(f.read().strip())
+            assert num_words == 8, f"number of words does not match. Expected 8 but got {num_words}"
+            return num_words
     except Exception:
         return 8
 
@@ -78,8 +80,8 @@ class TestMilestone2:
         assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
         msg_line = candidates[0]
         msg_len = len(msg_line)
-        assert 13 <= msg_len <= 50, (
-            f"FAIL: Output length {msg_len} is outside expected reasonable bounds format length (13-50 chars). "
+        assert 1 <= msg_len <= 100, (
+            f"FAIL: Output length {msg_len} is outside expected reasonable bounds format length (1-100 chars). "
             f"Output: '{msg_line}'"
         )
 
@@ -90,12 +92,12 @@ class TestMilestone2:
         msg_line = candidates[0]
 
         WORDS = [
-            "SOS SEND HELP NOW PLEASE",
+            "SOS",
             "RADIO WAVES ARE COOL",
             "MORSE CODE IS VERY OLD",
-            "PHYSICS AND SOFTWARE",
+            "TOM MOTTO OTTO TO",
             "ACCELEROMETER READS G",
-            "SOLVE THE PUZZLE FAST",
+            "TMO",
             "THE CAR IS DRIVING NOW",
             "WAVES TRAVEL FAST FAR"
         ]
@@ -113,7 +115,7 @@ class TestMilestone2:
         except Exception:
             pass
 
-        assert re.fullmatch(r"[A-Z ]{13,50}", expected), (
+        assert re.fullmatch(r"[A-Z ]{1,50}", expected), (
             f"FAIL: Verifier expected word is invalid: '{expected}'."
         )
 

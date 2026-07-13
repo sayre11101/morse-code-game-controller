@@ -2,23 +2,13 @@
 set -uo pipefail
 
 mkdir -p /logs/verifier
+mkdir -p /logs/agentsrc
 
-# Word bank with 20+ character phrases containing spaces
-WORDS=(
-  "SOS SEND HELP NOW PLEASE"
-  "RADIO WAVES ARE COOL"
-  "MORSE CODE IS VERY OLD"
-  "PHYSICS AND SOFTWARE"
-  "ACCELEROMETER READS G"
-  "SOLVE THE PUZZLE FAST"
-  "THE CAR IS DRIVING NOW"
-  "WAVES TRAVEL FAST FAR"
-)
 
-echo "42" > /tests/seed.txt
+echo "92" > /tests/seed.txt
 
-# Get length of words array
-NUM_WORDS=${#WORDS[@]}
+# Number of possible words
+NUM_WORDS=8
 echo "$NUM_WORDS" > /tests/num_words.txt
 
 # Compile the files
@@ -33,6 +23,11 @@ if [ "$COMPILE_RC" -ne 0 ]; then
   exit 0
 fi
 
+timestamp=$(date +"%Y%m%d-%H%M%S")
+mainname="main.c-${timestamp}.c"
+cp /app/main.c "/logs/verifier/${mainname}"
+mockname="mock_sensor.c-${timestamp}.c"
+cp /app/mock_sensor.c "/logs/verifier/${mockname}"
 rm -f /app/index.txt
 
 set +e

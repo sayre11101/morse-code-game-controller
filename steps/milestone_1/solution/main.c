@@ -34,6 +34,8 @@ int main(void) {
     
     int64_t min_mark = 99999999;
     
+    int64_t min_gap = 99999999;
+
     struct {
         bool is_mark; // true=mark (down), false=gap (up)
         int64_t duration;
@@ -71,9 +73,12 @@ int main(void) {
             // Transition UP -> DOWN (with 20ms debounce to bypass the stop spikes symmetrically!)
             if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                 if (last_transition_time > 0) {
+                    int64_t gap = current_time - last_transition_time;
                     pulses[num_pulses].is_mark = false;
-                    pulses[num_pulses].duration = current_time - last_transition_time;
+                    pulses[num_pulses].duration = gap;
                     num_pulses++;
+                    // Min gap between symbols inside a letter is exactly 1 dot 
+                    if (gap < min_gap) min_gap = gap;
                 }
                 is_down = true;
                 last_transition_time = current_time;
@@ -106,7 +111,15 @@ int main(void) {
     
     if (num_pulses == 0) return 0;
     
-    int64_t unit_time = min_mark;
+    // For dashed only tracking bounds where there is literally no internal dots
+    // Min gap is exactly 1 unit dot natively!
+    int64_t unit_time = min_gap; 
+    if (unit_time == 99999999 || unit_time < 50000) {
+        unit_time = min_mark;
+        if (unit_time > 400000) {
+            unit_time = unit_time / 3;
+        }
+    }
     if (unit_time == 0) unit_time = 150000; 
     
     char word[100] = {0};
@@ -120,8 +133,13 @@ int main(void) {
         if (pulses[i].is_mark) {
             if (units < 2.0) {
                 current_letter[symbol_idx++] = '.';
+                // update running average slowly using true dots
+                unit_time = (int64_t)((unit_time * 0.8) + (pulses[i].duration * 0.2));
             } else {
                 current_letter[symbol_idx++] = '-';
+                // update running average slowly using true dashes (dash / 3)
+                int64_t implied_dot = pulses[i].duration / 3;
+                unit_time = (int64_t)((unit_time * 0.9) + (implied_dot * 0.1));
             }
         } else {
             if (units > 2.0) { // Letter gap or word gap

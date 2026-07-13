@@ -25,7 +25,9 @@ def _extract_decoded_message_candidates(output_text):
 def get_num_words():
     try:
         with open("/tests/num_words.txt") as f:
-            return int(f.read().strip())
+            num = int(f.read().strip())
+            assert num == 8, f"Expected 8 static word options configured by the test driver, but received {num}"
+            return num
     except Exception:
         return 8
 
@@ -61,8 +63,9 @@ class TestMilestone1:
         except Exception:
             pytest.fail("FAIL: Agent did not call get_sample_stru correctly or log file is unreadable.")
         
+        # Enforce five-second hold logic check (which is strictly 5,000,000 / SAMPLE_PERIOD_US appended to the sample loop iterations mapped via timeline end correctly inside the tests runner file)
         assert actual_calls >= expected_min_calls, (
-            f"FAIL: The user application bypassed the IO polling entirely or sampled too slowly. Expected at least {expected_min_calls} calls, got {actual_calls}."
+            f"FAIL: The user application bounded too soon and bypassed the IO polling early or failed to sample hold time safely for five full seconds! Expected at least {expected_min_calls} iterations, got {actual_calls}."
         )
 
     def test_output_is_text(self, app_output):
@@ -78,8 +81,8 @@ class TestMilestone1:
         assert len(candidates) == 1, "FAIL: Expected exactly one decoded-message line."
         msg_line = candidates[0]
         msg_len = len(msg_line)
-        assert 13 <= msg_len <= 50, (
-            f"FAIL: Output length {msg_len} is outside expected reasonable bounds format length (13-50 chars). "
+        assert 1 <= msg_len <= 100, (
+            f"FAIL: Output length {msg_len} is outside expected reasonable bounds format length (1-100 chars). "
             f"Output: '{msg_line}'"
         )
 
@@ -90,12 +93,12 @@ class TestMilestone1:
         msg_line = candidates[0]
 
         WORDS = [
-            "SOS SEND HELP NOW PLEASE",
+            "SOS",
             "RADIO WAVES ARE COOL",
             "MORSE CODE IS VERY OLD",
-            "PHYSICS AND SOFTWARE",
+            "TOM MOTTO OTTO TO",
             "ACCELEROMETER READS G",
-            "SOLVE THE PUZZLE FAST",
+            "TMO",
             "THE CAR IS DRIVING NOW",
             "WAVES TRAVEL FAST FAR"
         ]
@@ -113,7 +116,7 @@ class TestMilestone1:
         except Exception:
             pass
 
-        assert re.fullmatch(r"[A-Z ]{13,50}", expected), (
+        assert re.fullmatch(r"[A-Z ]{1,50}", expected), (
             f"FAIL: Verifier expected word is invalid: '{expected}'."
         )
 

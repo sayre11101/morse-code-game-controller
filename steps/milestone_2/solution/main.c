@@ -7,6 +7,9 @@
 
 #define MAX_PULSES 1000
 
+// Minimum G-force deviation required from steady-state background tracking to register an explicit manual peak structure
+#define MIN_SPIKE_DETECTION_G 0.4
+
 static const char *morse_dict[26] = {
     ".-",   "-...", "-.-.", "-..",  ".",    // A-E
     "..-.", "--.",  "....", "..",   ".---", // F-J
@@ -34,6 +37,8 @@ int main(void) {
     
     int64_t min_mark = 99999999;
     
+    int64_t min_gap = 99999999;
+
     struct {
         bool is_mark; // true=mark (down), false=gap (up)
         int64_t duration;
@@ -60,8 +65,8 @@ int main(void) {
         
         double diff = r.z_acc - avg_z;
 
-        bool spike_down = (diff < -1.5);
-        bool spike_up   = (diff > +1.5);
+        bool spike_down = (diff < -MIN_SPIKE_DETECTION_G);
+        bool spike_up   = (diff > MIN_SPIKE_DETECTION_G);
         
         if (spike_down && !is_down) {
             in_transit = true;
@@ -73,9 +78,11 @@ int main(void) {
                 // Was UP, completed travel DOWN
                 if (last_transition_time == 0 || current_time - last_transition_time > 20000) {
                     if (last_transition_time > 0) {
+                        int64_t gap = current_time - last_transition_time;
                         pulses[num_pulses].is_mark = false;
-                        pulses[num_pulses].duration = current_time - last_transition_time;
+                        pulses[num_pulses].duration = gap;
                         num_pulses++;
+                        if (gap < min_gap) min_gap = gap;
                     }
                     is_down = true;
                     last_transition_time = current_time;
@@ -110,8 +117,17 @@ int main(void) {
     
     if (num_pulses == 0) return 0;
     
-    // Moving average tracking to handle drift
-    int64_t running_dot_us = min_mark;
+    // Moving average tracking to handle drift avoiding mis-classifying dash-only streams
+    // A single valid unit dot gap always exists anywhere there are 2 symbols natively.
+    int64_t running_dot_us = min_gap; 
+    
+    // If min_gap is impossibly small or no internal gaps triggered properly, fallback to min_mark bounds.
+    if (running_dot_us == 99999999 || running_dot_us < 50000) {
+        running_dot_us = min_mark;
+        if (running_dot_us > 400000) {
+            running_dot_us = running_dot_us / 3;
+        }
+    }
     if (running_dot_us == 0) running_dot_us = 150000;
 
     char word[100] = {0};
@@ -129,6 +145,9 @@ int main(void) {
                 running_dot_us = (int64_t)((running_dot_us * 0.8) + (pulses[i].duration * 0.2));
             } else {
                 current_letter[symbol_idx++] = '-';
+                // update running average slowly using true dashes (dash / 3)
+                int64_t implied_dot = pulses[i].duration / 3;
+                running_dot_us = (int64_t)((running_dot_us * 0.9) + (implied_dot * 0.1));
             }
         } else {
             if (units > 2.0) { // Letter gap or word gap

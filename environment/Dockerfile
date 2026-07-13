@@ -10,7 +10,10 @@ RUN apt-get update \
         asciinema \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install --no-cache-dir pytest==8.4.1 pytest-json-ctrf==0.3.5 --break-system-packages
+RUN pip install --no-cache-dir \
+    pytest==8.4.1 \
+    pytest-json-ctrf==0.3.5 \
+    --break-system-packages
 
 # ---------------------------------------------------------
 # 6. Setup Agent Workspace
